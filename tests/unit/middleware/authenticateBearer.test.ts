@@ -3,9 +3,68 @@ import {
   extractBearerToken,
   extractApiKey,
   extractCredentials,
+  looksLikeJwt,
 } from "../../../src/lib/middleware/authenticateBearer";
 
 describe("Credentials Authentication", () => {
+  describe("looksLikeJwt()", () => {
+    describe("valid JWT formats", () => {
+      it("should return true for a valid JWT structure", () => {
+        // Real JWT structure: header.payload.signature
+        const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        expect(looksLikeJwt(jwt)).toBe(true);
+      });
+
+      it("should return true for minimal valid JWT (short parts)", () => {
+        expect(looksLikeJwt("a.b.c")).toBe(true);
+      });
+
+      it("should return true for JWT with underscores and hyphens", () => {
+        // base64url uses - and _ instead of + and /
+        expect(looksLikeJwt("abc-def_ghi.jkl-mno_pqr.stu-vwx_yz")).toBe(true);
+      });
+
+      it("should return true for JWT with numbers", () => {
+        expect(looksLikeJwt("abc123.def456.ghi789")).toBe(true);
+      });
+    });
+
+    describe("invalid JWT formats", () => {
+      it("should return false for string with only 2 parts", () => {
+        expect(looksLikeJwt("header.payload")).toBe(false);
+      });
+
+      it("should return false for string with 4 parts", () => {
+        expect(looksLikeJwt("a.b.c.d")).toBe(false);
+      });
+
+      it("should return false for string with no dots", () => {
+        expect(looksLikeJwt("simple-api-key")).toBe(false);
+      });
+
+      it("should return false for empty string", () => {
+        expect(looksLikeJwt("")).toBe(false);
+      });
+
+      it("should return false for string with empty parts", () => {
+        expect(looksLikeJwt("a..c")).toBe(false);
+        expect(looksLikeJwt(".b.c")).toBe(false);
+        expect(looksLikeJwt("a.b.")).toBe(false);
+      });
+
+      it("should return false for string with non-base64url characters", () => {
+        // + and / are not valid in base64url
+        expect(looksLikeJwt("a+b.c/d.e=f")).toBe(false);
+      });
+
+      it("should return false for typical API key formats", () => {
+        expect(looksLikeJwt("sky-abc123-def456")).toBe(false);
+        expect(looksLikeJwt("sk_live_abc123def456")).toBe(false);
+        expect(looksLikeJwt("my-api-key")).toBe(false);
+      });
+    });
+  });
+
   describe("extractBearerToken()", () => {
     describe("valid tokens", () => {
       it("should extract token from valid Bearer header", () => {
@@ -188,38 +247,64 @@ describe("Credentials Authentication", () => {
   });
 
   describe("extractCredentials()", () => {
-    describe("bearer token takes precedence", () => {
-      it("should use bearer token when both are provided", () => {
-        const result = extractCredentials("Bearer token123", "api-key-456");
+    // Sample JWT for testing (valid format, not a real token)
+    const sampleJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+
+    describe("JWT bearer token in header", () => {
+      it("should detect JWT and return as token", () => {
+        const result = extractCredentials(`Bearer ${sampleJwt}`, undefined);
 
         expect(result.isPresent).toBe(true);
-        expect(result.credentials).toEqual({ token: "token123" });
+        expect(result.credentials).toEqual({ token: sampleJwt });
       });
 
-      it("should use bearer token when only bearer is provided", () => {
-        const result = extractCredentials("Bearer token123", undefined);
+      it("should use JWT from header even when API key query param is provided", () => {
+        const result = extractCredentials(`Bearer ${sampleJwt}`, "api-key-456");
 
         expect(result.isPresent).toBe(true);
-        expect(result.credentials).toEqual({ token: "token123" });
+        expect(result.credentials).toEqual({ token: sampleJwt });
       });
     });
 
-    describe("API key fallback", () => {
-      it("should use API key when bearer token is missing", () => {
+    describe("API key in header (non-JWT)", () => {
+      it("should detect non-JWT string and return as apiKey", () => {
+        const result = extractCredentials("Bearer sky-abc123-def456", undefined);
+
+        expect(result.isPresent).toBe(true);
+        expect(result.credentials).toEqual({ apiKey: "sky-abc123-def456" });
+      });
+
+      it("should use API key from header even when query param is also provided", () => {
+        const result = extractCredentials("Bearer my-api-key", "other-api-key");
+
+        expect(result.isPresent).toBe(true);
+        expect(result.credentials).toEqual({ apiKey: "my-api-key" });
+      });
+
+      it("should treat simple token string as API key", () => {
+        const result = extractCredentials("Bearer token123", undefined);
+
+        expect(result.isPresent).toBe(true);
+        expect(result.credentials).toEqual({ apiKey: "token123" });
+      });
+    });
+
+    describe("API key fallback to query parameter", () => {
+      it("should use API key from query param when header is missing", () => {
         const result = extractCredentials(undefined, "api-key-456");
 
         expect(result.isPresent).toBe(true);
         expect(result.credentials).toEqual({ apiKey: "api-key-456" });
       });
 
-      it("should use API key when bearer token is invalid", () => {
+      it("should use API key from query param when header is invalid", () => {
         const result = extractCredentials("InvalidAuth", "api-key-456");
 
         expect(result.isPresent).toBe(true);
         expect(result.credentials).toEqual({ apiKey: "api-key-456" });
       });
 
-      it("should use API key when bearer token is empty", () => {
+      it("should use API key from query param when bearer token is empty", () => {
         const result = extractCredentials("Bearer ", "api-key-456");
 
         expect(result.isPresent).toBe(true);
@@ -234,7 +319,7 @@ describe("Credentials Authentication", () => {
         expect(result.isPresent).toBe(false);
         expect(result.credentials).toBeUndefined();
         expect(result.error).toBe(
-          "Missing or invalid credentials. Provide either Authorization header with Bearer token or apiKey query parameter."
+          "Missing or invalid credentials. Provide either Authorization header with Bearer token/API key, or apiKey query parameter."
         );
       });
 
@@ -244,7 +329,7 @@ describe("Credentials Authentication", () => {
         expect(result.isPresent).toBe(false);
         expect(result.credentials).toBeUndefined();
         expect(result.error).toBe(
-          "Missing or invalid credentials. Provide either Authorization header with Bearer token or apiKey query parameter."
+          "Missing or invalid credentials. Provide either Authorization header with Bearer token/API key, or apiKey query parameter."
         );
       });
 
@@ -253,21 +338,29 @@ describe("Credentials Authentication", () => {
 
         expect(result.isPresent).toBe(false);
         expect(result.error).toBe(
-          "Missing or invalid credentials. Provide either Authorization header with Bearer token or apiKey query parameter."
+          "Missing or invalid credentials. Provide either Authorization header with Bearer token/API key, or apiKey query parameter."
         );
       });
     });
 
     describe("credential format validation", () => {
-      it("should return credentials in Skyflow token format", () => {
-        const result = extractCredentials("Bearer my-token", undefined);
+      it("should return JWT in Skyflow token format", () => {
+        const result = extractCredentials(`Bearer ${sampleJwt}`, undefined);
 
-        expect(result.credentials).toEqual({ token: "my-token" });
+        expect(result.credentials).toEqual({ token: sampleJwt });
         expect(result.credentials).toHaveProperty("token");
         expect(result.credentials).not.toHaveProperty("apiKey");
       });
 
-      it("should return credentials in Skyflow apiKey format", () => {
+      it("should return non-JWT header value in Skyflow apiKey format", () => {
+        const result = extractCredentials("Bearer my-api-key", undefined);
+
+        expect(result.credentials).toEqual({ apiKey: "my-api-key" });
+        expect(result.credentials).toHaveProperty("apiKey");
+        expect(result.credentials).not.toHaveProperty("token");
+      });
+
+      it("should return query param in Skyflow apiKey format", () => {
         const result = extractCredentials(undefined, "my-api-key");
 
         expect(result.credentials).toEqual({ apiKey: "my-api-key" });
