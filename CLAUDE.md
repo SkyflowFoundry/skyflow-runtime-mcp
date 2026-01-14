@@ -105,9 +105,10 @@ This ensures type safety and provides clear error messages for invalid inputs.
 
 ## Environment Configuration
 
-**Authentication Model**: The server supports two authentication methods (bearer token takes precedence):
-1. **Bearer token pass-through** (primary): Clients provide their Skyflow bearer token via `Authorization` header, which is forwarded to the Skyflow API
-2. **API key fallback**: If no bearer token is provided, clients can pass a Skyflow API key via `apiKey` query parameter
+**Authentication Model**: The server supports multiple authentication methods:
+1. **Bearer token via header** (JWT): Clients provide their Skyflow bearer token via `Authorization: Bearer <jwt>` header. The server auto-detects JWTs by their format (3 dot-separated base64url parts).
+2. **API key via header**: Clients can also pass a Skyflow API key via `Authorization: Bearer <api-key>` header. If the value doesn't look like a JWT, it's treated as an API key.
+3. **API key via query parameter** (fallback): Clients can pass a Skyflow API key via `apiKey` query parameter
 
 Optional fallback variables in `.env.local`:
 - `VAULT_ID`: Your Skyflow vault identifier (can be overridden via query parameter)
@@ -194,10 +195,12 @@ app.post("/mcp", authenticateBearer, async (req, res) => {
 ```
 
 **Credentials Authentication**
-- Supports two authentication methods with fallback logic:
-  1. **Bearer token** (primary): Extracted from `Authorization: Bearer <token>` header
-  2. **API key** (fallback): Extracted from `apiKey` query parameter
-- Bearer token takes precedence if both are provided
+- Supports multiple authentication methods with fallback logic:
+  1. **Authorization header** (primary): Extracted from `Authorization: Bearer <value>` header
+     - If value looks like a JWT (3 dot-separated base64url parts), treated as bearer token → `{ token }`
+     - Otherwise, treated as API key → `{ apiKey }`
+  2. **API key query parameter** (fallback): Extracted from `apiKey` query parameter → `{ apiKey }`
+- Authorization header takes precedence over query parameter
 - Validates format and presence of credentials
 - Returns appropriate HTTP status codes: 401 for missing/invalid credentials
 - Credentials are attached to request object in Skyflow SDK format and forwarded to Skyflow API

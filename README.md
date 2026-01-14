@@ -58,7 +58,7 @@ To use this MCP server with Claude Desktop, add the following configuration to y
   - `dehydrate`: Skyflow dehydration tool for detecting and redacting sensitive information (PII, PHI, etc.) in text
   - `rehydrate`: Reverses dehydration by restoring original sensitive data from tokens
   - `dehydrate_file`: Processes files (images, PDFs, audio, documents) to detect and redact sensitive information
-- **Authentication**: Bearer token pass-through - uses your Skyflow bearer token directly
+- **Authentication**: Supports both JWT bearer tokens and API keys via `Authorization` header (auto-detected)
 - **Multi-tenant**: Each request can specify different vault configurations via query parameters
 - **Transport**: Streamable HTTP with JSON response support
 - **Port**: Configurable via `PORT` environment variable (defaults to 3000)
@@ -140,7 +140,10 @@ If you prefer to run the inspector and server in separate terminals:
 
 ### Environment Variables
 
-**Authentication Model**: This server uses bearer token pass-through - clients provide their Skyflow bearer token which is forwarded directly to the Skyflow API.
+**Authentication Model**: This server supports multiple authentication methods:
+- **JWT bearer token**: Pass via `Authorization: Bearer <jwt>` header - auto-detected by JWT format
+- **API key via header**: Pass via `Authorization: Bearer <api-key>` header - non-JWT values are treated as API keys
+- **API key via query param**: Pass via `?apiKey=<api-key>` query parameter (fallback)
 
 Create a `.env.local` file with optional fallback values:
 
@@ -155,7 +158,8 @@ Create a `.env.local` file with optional fallback values:
 ## Testing
 
 **Note**: All requests require authentication and configuration. Replace placeholders with your actual values:
-- `{your_bearer_token}`: Your Skyflow bearer token
+
+- `{your_bearer_token}`: Your Skyflow JWT bearer token OR API key (auto-detected based on format)
 - `{vault_id}`: Your Skyflow vault ID
 - `{vault_url}`: Your Skyflow vault URL (e.g., `https://ebfc9bee4242.vault.skyflowapis.com`)
 
