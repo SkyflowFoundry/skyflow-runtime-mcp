@@ -197,10 +197,25 @@ export function authenticateBearer(
   );
 
   if (!result.isPresent) {
+    // Check if anonymous mode is configured
+    const anonApiKey = process.env.ANON_MODE_API_KEY;
+    const anonVaultId = process.env.ANON_MODE_VAULT_ID;
+    const anonVaultUrl = process.env.ANON_MODE_VAULT_URL;
+
+    if (anonApiKey && anonVaultId && anonVaultUrl) {
+      console.log("No credentials provided, entering anonymous mode");
+      req.isAnonymousMode = true;
+      req.skyflowCredentials = { apiKey: anonApiKey };
+      req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
+      return next();
+    }
+
+    // Anonymous mode not configured, return 401
     console.log("Credentials not found:", result.error);
     return res.status(401).json({ error: result.error });
   }
 
+  req.isAnonymousMode = false;
   const credentialType = result.credentials && "token" in result.credentials
     ? "bearer token (JWT)"
     : "API key";

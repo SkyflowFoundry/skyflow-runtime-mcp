@@ -76,9 +76,10 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 ### Tool Implementations
 
 **dehydrate tool**
-- Detects and replaces sensitive information with vault tokens
+- Detects and replaces sensitive information with tokens
 - Returns processed text with word/character counts
-- Uses `TokenFormat` with `VAULT_TOKEN` type
+- Uses `TokenFormat` with `VAULT_TOKEN` type in authenticated mode, `ENTITY_UNIQUE_COUNTER` in anonymous mode
+- In anonymous mode, adds `anonymousMode: true` and a note to the response
 - Has commented-out support for custom regex allow/restrict lists
 
 **rehydrate tool**
@@ -138,6 +139,32 @@ Fallback method (API key via query parameter):
 ```
 https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}&apiKey={your_skyflow_api_key}
 ```
+
+## Anonymous Mode
+
+When no credentials are provided in a request, the server can operate in "anonymous mode" if the following environment variables are configured:
+
+**Environment Variables for Anonymous Mode**:
+- `ANON_MODE_API_KEY`: Skyflow API key for demo vault
+- `ANON_MODE_VAULT_ID`: Demo vault identifier
+- `ANON_MODE_VAULT_URL`: Demo vault URL (e.g., `https://demo.vault.skyflowapis.com`)
+- `ANON_MODE_RATE_LIMIT_REQUESTS`: Max requests per window (default: 10)
+- `ANON_MODE_RATE_LIMIT_WINDOW_MS`: Window duration in milliseconds (default: 60000)
+
+**Tool Behavior in Anonymous Mode**:
+
+| Tool | Anonymous Mode | Authenticated Mode |
+|------|---------------|-------------------|
+| `dehydrate` | Works with `ENTITY_UNIQUE_COUNTER` tokens | Works with `VAULT_TOKEN` tokens |
+| `rehydrate` | Returns error with setup instructions | Works normally |
+| `dehydrate_file` | Returns error with setup instructions | Works normally |
+
+**Token Format Difference**:
+- **Anonymous mode**: Uses `TokenType.ENTITY_UNIQUE_COUNTER` - generates tokens like `[EMAIL_ADDRESS_1]`, `[SSN_2]`. Data is NOT persisted to vault.
+- **Authenticated mode**: Uses `TokenType.VAULT_TOKEN` - generates tokens like `[EMAIL_ADDRESS_abc123xyz]` that are stored in the vault and can be rehydrated.
+
+**Rate Limiting**:
+Anonymous mode requests are rate-limited based on client IP address. When the limit is exceeded, a 429 response is returned with `X-RateLimit-*` headers indicating when the limit resets.
 
 ## Port Configuration
 
@@ -228,8 +255,9 @@ return {
 
 1. **Don't reuse transport or Skyflow instances** - Always create new ones per request
 2. **File size limits** - Base64 encoding adds ~33% overhead; 5MB limit means ~3.75MB original files
-3. **Credentials required** - All `/mcp` requests must include either valid `Authorization: Bearer <token>` header with a Skyflow bearer token OR `apiKey` query parameter with a Skyflow API key
-4. **Query parameters required** - `vaultId` and `vaultUrl` must be provided (via query params or env vars)
+3. **Credentials or anonymous mode required** - All `/mcp` requests must include valid credentials OR anonymous mode must be configured via `ANON_MODE_*` environment variables
+4. **Query parameters required** - `vaultId` and `vaultUrl` must be provided (via query params or env vars) - unless using anonymous mode
 5. **Vault configuration** - `clusterId` is automatically extracted from `vaultUrl`, don't set it separately
 6. **Entity type validation** - Use exact strings from `ENTITY_MAP` keys, not the enum values
-7. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()`
+7. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
+8. **Anonymous mode limitations** - Only the `dehydrate` tool works in anonymous mode; `rehydrate` and `dehydrate_file` return errors with setup instructions
