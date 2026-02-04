@@ -155,6 +155,54 @@ Create a `.env.local` file with optional fallback values:
 
 **Note**: `SKYFLOW_API_KEY` and `REQUIRED_BEARER_TOKEN` are no longer used. The bearer token is now passed through from the client to Skyflow.
 
+## Anonymous Mode (Try Before You Buy)
+
+You can try the dehydrate tool without configuring Skyflow credentials. When no credentials are provided and anonymous mode is enabled on the server, limited functionality is available.
+
+### Quick Start (Anonymous)
+
+```bash
+# No credentials needed!
+curl -X POST "https://pii-mcp.dev/mcp" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john@example.com and my SSN is 123-45-6789"}},"id":1}'
+```
+
+### Limitations in Anonymous Mode
+
+- **Only `dehydrate` tool available** - `rehydrate` and `dehydrate_file` return helpful errors
+- **Tokens use entity counters** - e.g., `[EMAIL_ADDRESS_1]`, `[SSN_2]` instead of vault tokens
+- **Data is NOT persisted** - tokens cannot be rehydrated later
+- **Rate limited** - 10 requests per minute per IP (configurable by server operator)
+
+### Claude Desktop (Anonymous)
+
+To use anonymous mode with Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "skyflow-pii-demo": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://pii-mcp.dev/mcp"]
+    }
+  }
+}
+```
+
+To unlock full functionality (rehydrate, file processing, persistent vault tokens), configure your Skyflow credentials as shown in the sections above.
+
+### Server Configuration for Anonymous Mode
+
+Server operators can enable anonymous mode by setting these environment variables:
+
+- `ANON_MODE_API_KEY`: Skyflow API key for demo vault
+- `ANON_MODE_VAULT_ID`: Demo vault identifier
+- `ANON_MODE_VAULT_URL`: Demo vault URL
+- `ANON_MODE_RATE_LIMIT_REQUESTS`: Max requests per window (default: 10)
+- `ANON_MODE_RATE_LIMIT_WINDOW_MS`: Window duration in ms (default: 60000)
+
 ## Testing
 
 **Note**: All requests require authentication and configuration. Replace placeholders with your actual values:

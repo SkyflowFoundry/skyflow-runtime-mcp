@@ -182,29 +182,40 @@ export function authenticateBearer(
   res: Response,
   next: NextFunction
 ) {
-  // Debug logging - indicate presence without logging sensitive values
-  console.log("Auth Debug:", {
-    authHeader: req.headers.authorization ? "present" : "missing",
-    apiKeyQuery: req.query.apiKey ? "present" : "missing",
-    vaultId: req.query.vaultId,
-    vaultUrl: req.query.vaultUrl,
-    path: req.path,
-  });
-
   const result = extractCredentials(
     req.headers.authorization,
     req.query.apiKey as string | undefined
   );
 
   if (!result.isPresent) {
-    console.log("Credentials not found:", result.error);
+    // Check if anonymous mode is configured
+    const anonApiKey = process.env.ANON_MODE_API_KEY;
+    const anonVaultId = process.env.ANON_MODE_VAULT_ID;
+    const anonVaultUrl = process.env.ANON_MODE_VAULT_URL;
+
+    // Warn if only some anonymous mode env vars are set
+    const anonVarsSet = [anonApiKey, anonVaultId, anonVaultUrl].filter(
+      Boolean
+    ).length;
+    if (anonVarsSet > 0 && anonVarsSet < 3) {
+      console.warn(
+        `Partial anonymous mode configuration detected (${anonVarsSet}/3 vars set). ` +
+          "All three ANON_MODE_* env vars are required: ANON_MODE_API_KEY, ANON_MODE_VAULT_ID, ANON_MODE_VAULT_URL"
+      );
+    }
+
+    if (anonApiKey && anonVaultId && anonVaultUrl) {
+      req.isAnonymousMode = true;
+      req.skyflowCredentials = { apiKey: anonApiKey };
+      req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
+      return next();
+    }
+
+    // Anonymous mode not configured, return 401
     return res.status(401).json({ error: result.error });
   }
 
-  const credentialType = result.credentials && "token" in result.credentials
-    ? "bearer token (JWT)"
-    : "API key";
-  console.log("Credentials found, type:", credentialType);
+  req.isAnonymousMode = false;
   req.skyflowCredentials = result.credentials;
   next();
 }

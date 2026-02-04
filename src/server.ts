@@ -27,6 +27,10 @@ import {
 } from "./lib/mappings/entityMaps.js";
 import { validateVaultConfig } from "./lib/validation/vaultConfig.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
+import {
+  createAnonymousRateLimiter,
+  getAnonymousRateLimitConfig,
+} from "./lib/middleware/rateLimiter.js";
 
 /** Default maximum wait time for file dehydration operations (in seconds) */
 const DEFAULT_MAX_WAIT_TIME_SECONDS = 64;
@@ -64,6 +68,7 @@ interface DeidentifyFileOutput {
 interface RequestContext {
   skyflow: Skyflow;
   vaultId: string;
+  isAnonymousMode: boolean;
 }
 
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();
@@ -90,6 +95,17 @@ function getCurrentVaultId(): string {
   return context.vaultId;
 }
 
+/**
+ * Check if the current request is in anonymous mode
+ */
+function isAnonymousMode(): boolean {
+  const context = requestContextStorage.getStore();
+  if (!context) {
+    throw new Error("No request context available");
+  }
+  return context.isAnonymousMode;
+}
+
 // Create an MCP server
 const server = new McpServer({
   name: "demo-server",
@@ -111,11 +127,27 @@ server.registerTool(
       processedText: z.string(),
       wordCount: z.number(),
       charCount: z.number(),
+      anonymousMode: z
+        .boolean()
+        .optional()
+        .describe("True when running in anonymous mode (no credentials provided)"),
+      note: z
+        .string()
+        .optional()
+        .describe("Additional information about the response, such as anonymous mode limitations"),
     },
   },
   async ({ inputString }) => {
+    const anonymousMode = isAnonymousMode();
+
     const tokenFormat = new TokenFormat();
-    tokenFormat.setDefault(TokenType.VAULT_TOKEN);
+    if (anonymousMode) {
+      // Anonymous mode: use ENTITY_UNIQUE_COUNTER (no vault storage)
+      tokenFormat.setDefault(TokenType.ENTITY_UNIQUE_COUNTER);
+    } else {
+      // Authenticated mode: use VAULT_TOKEN (persistent storage)
+      tokenFormat.setDefault(TokenType.VAULT_TOKEN);
+    }
 
     const options = new DeidentifyTextOptions();
     options.setTokenFormat(tokenFormat);
@@ -139,6 +171,10 @@ server.registerTool(
       processedText: response.processedText,
       wordCount: response.wordCount,
       charCount: response.charCount,
+      ...(anonymousMode && {
+        anonymousMode: true,
+        note: "Running in anonymous mode. Tokens are not persisted. Configure credentials for full functionality.",
+      }),
     };
 
     return {
@@ -164,6 +200,26 @@ server.registerTool(
     },
   },
   async ({ inputString }) => {
+    // Check if in anonymous mode
+    if (isAnonymousMode()) {
+      const errorOutput = {
+        error: "rehydrate is not available in anonymous mode",
+        anonymousModeRestricted: true,
+        message:
+          "The rehydrate tool requires authenticated access to restore sensitive data from vault tokens. " +
+          "To use this feature, configure your Skyflow credentials:\n\n" +
+          "1. Get your API key from the Skyflow dashboard\n" +
+          "2. Add via Authorization header: 'Bearer <api-key>'\n" +
+          "   Or via query parameter: '?apiKey=<api-key>'",
+        helpUrl: "https://docs.skyflow.com/",
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(errorOutput) }],
+        structuredContent: errorOutput,
+        isError: true,
+      };
+    }
+
     // Get the per-request Skyflow instance
     const skyflow = getCurrentSkyflow();
 
@@ -370,6 +426,28 @@ server.registerTool(
     maxResolution,
     waitTime,
   }) => {
+    // Check if in anonymous mode
+    if (isAnonymousMode()) {
+      const errorOutput = {
+        error: "dehydrate_file is not available in anonymous mode",
+        anonymousModeRestricted: true,
+        message:
+          "File deidentification requires authenticated access for secure processing. " +
+          "To use this feature, configure your Skyflow credentials:\n\n" +
+          "1. Get your API key from the Skyflow dashboard\n" +
+          "2. Add via Authorization header: 'Bearer <api-key>'\n" +
+          "   Or via query parameter: '?apiKey=<api-key>'\n\n" +
+          "For text-only deidentification, you can use the 'dehydrate' tool in anonymous mode.",
+        helpUrl: "https://docs.skyflow.com/",
+        alternativeTool: "dehydrate",
+      };
+      return {
+        content: [{ type: "text", text: JSON.stringify(errorOutput) }],
+        structuredContent: errorOutput,
+        isError: true,
+      };
+    }
+
     try {
       // Decode base64 to buffer
       const buffer = Buffer.from(fileData, "base64");
@@ -526,20 +604,38 @@ app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
 // Serve static files from the public directory
 app.use(express.static("public"));
 
+// Create rate limiter for anonymous mode
+const anonymousRateLimiter = createAnonymousRateLimiter(
+  getAnonymousRateLimitConfig()
+);
+
 // Extend Express Request type to include custom properties
 declare global {
   namespace Express {
     interface Request {
       skyflowCredentials?: { token: string } | { apiKey: string };
+      isAnonymousMode: boolean; // Always set by authenticateBearer middleware
+      anonVaultConfig?: { vaultId: string; vaultUrl: string };
     }
   }
 }
 
-app.post("/mcp", authenticateBearer, async (req, res) => {
-  // Extract query parameters for vault configuration
+app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
+  // Determine vault configuration based on mode
+  let vaultId: string | undefined;
+  let vaultUrl: string | undefined;
+
+  if (req.isAnonymousMode && req.anonVaultConfig) {
+    // Use anonymous mode configuration
+    vaultId = req.anonVaultConfig.vaultId;
+    vaultUrl = req.anonVaultConfig.vaultUrl;
+  } else {
+    // Use client-provided or environment configuration
+    vaultId = (req.query.vaultId as string) || process.env.VAULT_ID;
+    vaultUrl = (req.query.vaultUrl as string) || process.env.VAULT_URL;
+  }
+
   const accountId = (req.query.accountId as string) || process.env.ACCOUNT_ID;
-  const vaultId = (req.query.vaultId as string) || process.env.VAULT_ID;
-  const vaultUrl = (req.query.vaultUrl as string) || process.env.VAULT_URL;
   const workspaceId =
     (req.query.workspaceId as string) || process.env.WORKSPACE_ID;
 
@@ -575,7 +671,7 @@ app.post("/mcp", authenticateBearer, async (req, res) => {
       ],
     });
   } catch (error) {
-    console.log("Skyflow SDK initialization failed:", error instanceof Error ? error.message : "Unknown error");
+    console.warn("Skyflow SDK initialization failed:", error instanceof Error ? error.message : "Unknown error");
     return res.status(401).json({
       error: "Invalid credentials. Please provide valid Skyflow bearer token or API key."
     });
@@ -594,7 +690,11 @@ app.post("/mcp", authenticateBearer, async (req, res) => {
   // Run the MCP request handling within the AsyncLocalStorage context
   // This makes the Skyflow instance available to all tools via getCurrentSkyflow()
   await requestContextStorage.run(
-    { skyflow: skyflowInstance, vaultId: validatedVaultId },
+    {
+      skyflow: skyflowInstance,
+      vaultId: validatedVaultId,
+      isAnonymousMode: req.isAnonymousMode,
+    },
     async () => {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
