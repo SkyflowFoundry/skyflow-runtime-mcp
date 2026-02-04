@@ -32,14 +32,14 @@ pnpm inspector   # Start only the MCP Inspector
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
+  -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # Call dehydrate tool
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
+  -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john.doe@example.com"}},"id":2}'
 ```
 
@@ -132,12 +132,12 @@ https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={a
 ```
 With header:
 ```
-Authorization: Bearer {your_skyflow_bearer_token} # gitleaks:allow
+Authorization: Bearer {your_skyflow_bearer_token}
 ```
 
 Fallback method (API key via query parameter):
 ```
-https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}&apiKey={your_skyflow_api_key} # gitleaks:allow
+https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}&apiKey={your_skyflow_api_key}
 ```
 
 ## Anonymous Mode

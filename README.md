@@ -24,7 +24,7 @@ To use this MCP server with Claude Desktop, add the following configuration to y
       "command": "npx",
       "args": ["mcp-remote", "https://pii-mcp.dev/mcp"],
       "headers": {
-        "Authorization": "Bearer {mcp token here}" // gitleaks:allow
+        "Authorization": "Bearer {mcp token here}"
       }
     }
   }
@@ -219,7 +219,7 @@ Test the MCP server by listing available tools:
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
+  -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
@@ -231,7 +231,7 @@ Test calling the `dehydrate` tool to redact sensitive information:
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
+  -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john.doe@example.com and my SSN is 123-45-6789"}},"id":2}'
 ```
 
@@ -245,7 +245,7 @@ Test calling the `rehydrate` tool to restore original sensitive data:
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
+  -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"rehydrate","arguments":{"inputString":"[REDACTED_TEXT_WITH_TOKENS]"}},"id":3}'
 ```
 
@@ -264,7 +264,7 @@ For local testing with environment variable fallbacks:
       "command": "npx",
       "args": ["mcp-remote", "http://localhost:3000/mcp"],
       "headers": {
-        "Authorization": "Bearer {your_skyflow_bearer_token}" // gitleaks:allow
+        "Authorization": "Bearer {your_skyflow_bearer_token}"
       }
     }
   }
@@ -282,7 +282,7 @@ For connecting to the hosted server or any remote instance with dynamic configur
       "command": "npx",
       "args": ["mcp-remote", "https://pii-mcp.dev/mcp?accountId={account_id}&vaultId={vault_id}&vaultUrl={vault_url}&workspaceId={workspace_id}"],
       "headers": {
-        "Authorization": "Bearer {your_skyflow_bearer_token}" // gitleaks:allow
+        "Authorization": "Bearer {your_skyflow_bearer_token}"
       }
     }
   }
