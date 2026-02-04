@@ -418,7 +418,7 @@ describe("Credentials Authentication", () => {
     describe("Anonymous Mode Detection", () => {
       describe("when credentials missing and ANON env vars configured", () => {
         beforeEach(() => {
-          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key");
+          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key"); // gitleaks:allow
           vi.stubEnv("ANON_MODE_VAULT_ID", "demo-vault-id");
           vi.stubEnv("ANON_MODE_VAULT_URL", "https://demo.vault.skyflowapis.com");
         });
@@ -486,7 +486,7 @@ describe("Credentials Authentication", () => {
       describe("when credentials provided", () => {
         beforeEach(() => {
           // Configure ANON env vars (should be ignored when credentials are provided)
-          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key");
+          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key"); // gitleaks:allow
           vi.stubEnv("ANON_MODE_VAULT_ID", "demo-vault-id");
           vi.stubEnv("ANON_MODE_VAULT_URL", "https://demo.vault.skyflowapis.com");
         });

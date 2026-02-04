@@ -76,7 +76,7 @@ export function extractBearerToken(
  * @returns TokenExtractionResult with isPresent, optional token (apiKey), and optional error
  *
  * @example
- * extractApiKey("my-api-key-123") // => { isPresent: true, token: "my-api-key-123" }
+ * extractApiKey("my-api-key-123") // => { isPresent: true, token: "my-api-key-123" } // gitleaks:allow
  * extractApiKey("") // => { isPresent: false, error: "..." }
  * extractApiKey(undefined) // => { isPresent: false, error: "..." }
  */
@@ -127,7 +127,7 @@ export function extractApiKey(
  * // => { isPresent: true, credentials: { apiKey: "sky-abc123-def456" } }
  *
  * // API key in query parameter
- * extractCredentials(undefined, "my-api-key")
+ * extractCredentials(undefined, "my-api-key") // gitleaks:allow
  * // => { isPresent: true, credentials: { apiKey: "my-api-key" } }
  *
  * extractCredentials(undefined, undefined)
