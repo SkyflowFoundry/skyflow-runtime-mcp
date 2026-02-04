@@ -76,7 +76,7 @@ export function extractBearerToken(
  * @returns TokenExtractionResult with isPresent, optional token (apiKey), and optional error
  *
  * @example
- * extractApiKey("my-api-key-123") // => { isPresent: true, token: "my-api-key-123" }
+ * extractApiKey("my-api-key-123") // => { isPresent: true, token: "my-api-key-123" } // gitleaks:allow
  * extractApiKey("") // => { isPresent: false, error: "..." }
  * extractApiKey(undefined) // => { isPresent: false, error: "..." }
  */
@@ -119,15 +119,15 @@ export function extractApiKey(
  *
  * @example
  * // JWT bearer token in header
- * extractCredentials("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", undefined)
+ * extractCredentials("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", undefined) // gitleaks:allow
  * // => { isPresent: true, credentials: { token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." } }
  *
  * // API key in header (not a JWT)
- * extractCredentials("Bearer sky-abc123-def456", undefined)
+ * extractCredentials("Bearer sky-abc123-def456", undefined) // gitleaks:allow
  * // => { isPresent: true, credentials: { apiKey: "sky-abc123-def456" } }
  *
  * // API key in query parameter
- * extractCredentials(undefined, "my-api-key")
+ * extractCredentials(undefined, "my-api-key") // gitleaks:allow
  * // => { isPresent: true, credentials: { apiKey: "my-api-key" } }
  *
  * extractCredentials(undefined, undefined)

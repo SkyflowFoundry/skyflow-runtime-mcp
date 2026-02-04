@@ -166,6 +166,22 @@ When no credentials are provided in a request, the server can operate in "anonym
 **Rate Limiting**:
 Anonymous mode requests are rate-limited based on client IP address. When the limit is exceeded, a 429 response is returned with `X-RateLimit-*` headers indicating when the limit resets.
 
+**Placeholder Value Fallback**:
+The server automatically falls back to anonymous mode when query parameters contain unsubstituted template placeholders. This handles cases where users configure the MCP server URL with environment variable templates that don't get substituted:
+
+```text
+?vaultId=${SKYFLOW_VAULT_ID}&vaultUrl=${SKYFLOW_VAULT_URL}
+```
+
+Detected placeholder patterns:
+
+- `${VAR_NAME}` - shell/env var style (most common)
+- `$VAR_NAME` - direct env var reference
+- `{{VAR_NAME}}` - mustache/handlebars style
+- `%VAR_NAME%` - Windows env var style
+
+When placeholders are detected and anonymous mode is configured, the server logs a message and uses the anonymous mode vault configuration instead.
+
 ## Port Configuration
 
 - **3000**: MCP server (configurable via `PORT` env var)

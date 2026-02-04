@@ -44,7 +44,7 @@ describe("Credentials Authentication", () => {
     describe("valid JWT formats", () => {
       it("should return true for a valid JWT structure", () => {
         // Real JWT structure: header.payload.signature
-        const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"; // gitleaks:allow
         expect(looksLikeJwt(jwt)).toBe(true);
       });
 
@@ -92,7 +92,7 @@ describe("Credentials Authentication", () => {
 
       it("should return false for typical API key formats", () => {
         expect(looksLikeJwt("sky-abc123-def456")).toBe(false);
-        expect(looksLikeJwt("sk_live_abc123def456")).toBe(false);
+        expect(looksLikeJwt("sk_live_abc123def456")).toBe(false); // gitleaks:allow
         expect(looksLikeJwt("my-api-key")).toBe(false);
       });
     });
@@ -281,7 +281,7 @@ describe("Credentials Authentication", () => {
 
   describe("extractCredentials()", () => {
     // Sample JWT for testing (valid format, not a real token)
-    const sampleJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    const sampleJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"; // gitleaks:allow
 
     describe("JWT bearer token in header", () => {
       it("should detect JWT and return as token", () => {
@@ -418,7 +418,7 @@ describe("Credentials Authentication", () => {
     describe("Anonymous Mode Detection", () => {
       describe("when credentials missing and ANON env vars configured", () => {
         beforeEach(() => {
-          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key");
+          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key"); // gitleaks:allow
           vi.stubEnv("ANON_MODE_VAULT_ID", "demo-vault-id");
           vi.stubEnv("ANON_MODE_VAULT_URL", "https://demo.vault.skyflowapis.com");
         });
@@ -486,7 +486,7 @@ describe("Credentials Authentication", () => {
       describe("when credentials provided", () => {
         beforeEach(() => {
           // Configure ANON env vars (should be ignored when credentials are provided)
-          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key");
+          vi.stubEnv("ANON_MODE_API_KEY", "demo-api-key"); // gitleaks:allow
           vi.stubEnv("ANON_MODE_VAULT_ID", "demo-vault-id");
           vi.stubEnv("ANON_MODE_VAULT_URL", "https://demo.vault.skyflowapis.com");
         });
@@ -506,7 +506,7 @@ describe("Credentials Authentication", () => {
         });
 
         it("should set isAnonymousMode = false when JWT in header", () => {
-          const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+          const jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"; // gitleaks:allow
           const req = createMockRequest({
             headers: { authorization: `Bearer ${jwt}` },
           }) as Request;
