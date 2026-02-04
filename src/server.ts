@@ -606,7 +606,7 @@ declare global {
   namespace Express {
     interface Request {
       skyflowCredentials?: { token: string } | { apiKey: string };
-      isAnonymousMode?: boolean;
+      isAnonymousMode: boolean; // Always set by authenticateBearer middleware
       anonVaultConfig?: { vaultId: string; vaultUrl: string };
     }
   }
@@ -686,7 +686,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
     {
       skyflow: skyflowInstance,
       vaultId: validatedVaultId,
-      isAnonymousMode: req.isAnonymousMode ?? false,
+      isAnonymousMode: req.isAnonymousMode,
     },
     async () => {
       await server.connect(transport);

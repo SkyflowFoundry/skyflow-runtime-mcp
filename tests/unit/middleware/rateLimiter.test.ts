@@ -150,6 +150,40 @@ describe("Anonymous Rate Limiter", () => {
         expect(statusCode).toBeNull();
       });
 
+      it("should allow exactly maxRequests and block the next one", () => {
+        const rateLimiter = createAnonymousRateLimiter(config);
+        const results: { allowed: boolean; remaining: number | undefined }[] = [];
+
+        // Make maxRequests + 2 requests to verify boundary
+        for (let i = 0; i < config.maxRequests + 2; i++) {
+          const req = createMockRequest({
+            isAnonymousMode: true,
+            ip: "192.168.1.1",
+          }) as Request;
+          const mockRes = createMockResponse();
+          const next = vi.fn();
+
+          rateLimiter(req, mockRes.res as Response, next);
+
+          results.push({
+            allowed: mockRes.statusCode === null,
+            remaining: mockRes.headers["X-RateLimit-Remaining"] as number | undefined,
+          });
+        }
+
+        // With maxRequests=3:
+        // - Request 1: allowed, remaining=2
+        // - Request 2: allowed, remaining=1
+        // - Request 3: allowed, remaining=0
+        // - Request 4: blocked (429), remaining=0
+        // - Request 5: blocked (429), remaining=0
+        expect(results[0]).toEqual({ allowed: true, remaining: 2 });
+        expect(results[1]).toEqual({ allowed: true, remaining: 1 });
+        expect(results[2]).toEqual({ allowed: true, remaining: 0 });
+        expect(results[3]).toEqual({ allowed: false, remaining: 0 });
+        expect(results[4]).toEqual({ allowed: false, remaining: 0 });
+      });
+
       it("should block requests over the limit", () => {
         const rateLimiter = createAnonymousRateLimiter(config);
         const next = vi.fn();
@@ -165,10 +199,10 @@ describe("Anonymous Rate Limiter", () => {
           rateLimiter(req, mockRes.res as Response, next);
 
           if (i < config.maxRequests) {
-            // Should allow requests up to limit
+            // Requests 0 to maxRequests-1 (i.e., first maxRequests requests) should be allowed
             expect(mockRes.statusCode).toBeNull();
           } else {
-            // Should block request exceeding limit
+            // Request at index maxRequests (i.e., maxRequests+1th request) should be blocked
             expect(mockRes.statusCode).toBe(429);
             expect(mockRes.jsonBody).toHaveProperty("error");
             expect((mockRes.jsonBody as Record<string, unknown>).error).toContain("Rate limit exceeded");

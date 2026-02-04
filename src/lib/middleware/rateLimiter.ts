@@ -73,25 +73,22 @@ export function createAnonymousRateLimiter(config: RateLimiterConfig) {
 
     if (!entry || now > entry.resetTime) {
       // Create new entry or reset expired one
+      // count represents "requests made so far" (before this one)
       entry = {
-        count: 1,
+        count: 0,
         resetTime: now + config.windowMs,
       };
       rateLimitStore.set(key, entry);
-    } else {
-      entry.count++;
     }
 
-    // Set rate limit headers
-    const remaining = Math.max(0, config.maxRequests - entry.count);
     const resetSeconds = Math.ceil((entry.resetTime - now) / 1000);
 
-    res.setHeader("X-RateLimit-Limit", config.maxRequests);
-    res.setHeader("X-RateLimit-Remaining", remaining);
-    res.setHeader("X-RateLimit-Reset", resetSeconds);
-
-    if (entry.count > config.maxRequests) {
+    // Check if this request would exceed the limit BEFORE incrementing
+    if (entry.count >= config.maxRequests) {
       console.log(`Rate limit exceeded for anonymous client: ${clientId}`);
+      res.setHeader("X-RateLimit-Limit", config.maxRequests);
+      res.setHeader("X-RateLimit-Remaining", 0);
+      res.setHeader("X-RateLimit-Reset", resetSeconds);
       return res.status(429).json({
         error: "Rate limit exceeded for anonymous mode",
         message:
@@ -101,6 +98,15 @@ export function createAnonymousRateLimiter(config: RateLimiterConfig) {
         helpUrl: "https://docs.skyflow.com/",
       });
     }
+
+    // Request allowed - increment count AFTER the check
+    entry.count++;
+
+    // Set rate limit headers for successful request
+    const remaining = config.maxRequests - entry.count;
+    res.setHeader("X-RateLimit-Limit", config.maxRequests);
+    res.setHeader("X-RateLimit-Remaining", remaining);
+    res.setHeader("X-RateLimit-Reset", resetSeconds);
 
     next();
   };

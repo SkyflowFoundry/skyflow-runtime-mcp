@@ -202,6 +202,17 @@ export function authenticateBearer(
     const anonVaultId = process.env.ANON_MODE_VAULT_ID;
     const anonVaultUrl = process.env.ANON_MODE_VAULT_URL;
 
+    // Warn if only some anonymous mode env vars are set
+    const anonVarsSet = [anonApiKey, anonVaultId, anonVaultUrl].filter(
+      Boolean
+    ).length;
+    if (anonVarsSet > 0 && anonVarsSet < 3) {
+      console.warn(
+        `Partial anonymous mode configuration detected (${anonVarsSet}/3 vars set). ` +
+          "All three ANON_MODE_* env vars are required: ANON_MODE_API_KEY, ANON_MODE_VAULT_ID, ANON_MODE_VAULT_URL"
+      );
+    }
+
     if (anonApiKey && anonVaultId && anonVaultUrl) {
       console.log("No credentials provided, entering anonymous mode");
       req.isAnonymousMode = true;
