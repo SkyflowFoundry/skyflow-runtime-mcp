@@ -264,3 +264,4 @@ The `isError` property is set to `true` when a tool returns an error condition (
 6. **Entity type validation** - Use exact strings from `ENTITY_MAP` keys, not the enum values
 7. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
 8. **Anonymous mode limitations** - Only the `dehydrate` tool works in anonymous mode; `rehydrate` and `dehydrate_file` return errors with setup instructions
+9. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.
