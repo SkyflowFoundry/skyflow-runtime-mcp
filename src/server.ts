@@ -127,6 +127,14 @@ server.registerTool(
       processedText: z.string(),
       wordCount: z.number(),
       charCount: z.number(),
+      anonymousMode: z
+        .boolean()
+        .optional()
+        .describe("True when running in anonymous mode (no credentials provided)"),
+      note: z
+        .string()
+        .optional()
+        .describe("Additional information about the response, such as anonymous mode limitations"),
     },
   },
   async ({ inputString }) => {
