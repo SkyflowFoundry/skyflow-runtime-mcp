@@ -75,12 +75,14 @@ describe("Anonymous Rate Limiter", () => {
       expect(getClientId(req)).toBe("203.0.113.195");
     });
 
-    it("should extract first IP from X-Forwarded-For header (multiple IPs)", () => {
+    it("should extract rightmost IP from X-Forwarded-For header (multiple IPs) to prevent spoofing", () => {
+      // Security: Use the rightmost IP - the one that connected to our trusted proxy.
+      // Left-most IPs are client-controlled and can be spoofed.
       const req = createMockRequest({
         headers: { "x-forwarded-for": "203.0.113.195, 70.41.3.18, 150.172.238.178" },
       }) as Request;
 
-      expect(getClientId(req)).toBe("203.0.113.195");
+      expect(getClientId(req)).toBe("150.172.238.178");
     });
 
     it("should trim whitespace from extracted IP", () => {

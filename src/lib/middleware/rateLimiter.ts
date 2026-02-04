@@ -10,8 +10,12 @@ interface RateLimiterConfig {
   windowMs: number;
 }
 
+/** Interval for cleaning up expired rate limit entries (1 minute) */
+const CLEANUP_INTERVAL_MS = 60_000;
+
 // In-memory store for rate limiting (suitable for single-instance deployment)
-// For production multi-instance deployment, consider Redis
+// WARNING: This Map can grow with unique client IPs. For high-traffic production
+// deployments, consider using Redis to avoid memory issues and support multi-instance.
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 /**
@@ -19,12 +23,14 @@ const rateLimitStore = new Map<string, RateLimitEntry>();
  * Uses IP address, falling back to a combination of headers
  */
 export function getClientId(req: Request): string {
-  // Prefer X-Forwarded-For for proxied requests (Vercel, etc.)
+  // Use X-Forwarded-For for proxied requests (Vercel, etc.)
+  // SECURITY: Use the rightmost IP - the one that connected to our trusted proxy.
+  // Left-most IPs are client-controlled and can be spoofed to bypass rate limiting.
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
     const ips = Array.isArray(forwarded)
-      ? forwarded[0]
-      : forwarded.split(",")[0];
+      ? forwarded[forwarded.length - 1]
+      : forwarded.split(",").pop()!;
     return ips.trim();
   }
 
@@ -45,7 +51,7 @@ function cleanupExpiredEntries(): void {
 }
 
 // Run cleanup every minute
-const cleanupInterval = setInterval(cleanupExpiredEntries, 60000);
+const cleanupInterval = setInterval(cleanupExpiredEntries, CLEANUP_INTERVAL_MS);
 
 // Allow cleanup interval to not prevent process exit
 cleanupInterval.unref();
@@ -85,7 +91,6 @@ export function createAnonymousRateLimiter(config: RateLimiterConfig) {
 
     // Check if this request would exceed the limit BEFORE incrementing
     if (entry.count >= config.maxRequests) {
-      console.log(`Rate limit exceeded for anonymous client: ${clientId}`);
       res.setHeader("X-RateLimit-Limit", config.maxRequests);
       res.setHeader("X-RateLimit-Remaining", 0);
       res.setHeader("X-RateLimit-Reset", resetSeconds);
@@ -114,12 +119,20 @@ export function createAnonymousRateLimiter(config: RateLimiterConfig) {
 
 /**
  * Get rate limit configuration from environment variables
+ * @throws Error if environment variables contain invalid values
  */
 export function getAnonymousRateLimitConfig(): RateLimiterConfig {
-  return {
-    maxRequests: parseInt(process.env.ANON_MODE_RATE_LIMIT_REQUESTS || "10", 10),
-    windowMs: parseInt(process.env.ANON_MODE_RATE_LIMIT_WINDOW_MS || "60000", 10),
-  };
+  const maxRequests = parseInt(process.env.ANON_MODE_RATE_LIMIT_REQUESTS || "10", 10);
+  const windowMs = parseInt(process.env.ANON_MODE_RATE_LIMIT_WINDOW_MS || "60000", 10);
+
+  if (isNaN(maxRequests) || maxRequests <= 0) {
+    throw new Error("Invalid ANON_MODE_RATE_LIMIT_REQUESTS: must be a positive integer");
+  }
+  if (isNaN(windowMs) || windowMs <= 0) {
+    throw new Error("Invalid ANON_MODE_RATE_LIMIT_WINDOW_MS: must be a positive integer");
+  }
+
+  return { maxRequests, windowMs };
 }
 
 /**

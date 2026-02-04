@@ -182,15 +182,6 @@ export function authenticateBearer(
   res: Response,
   next: NextFunction
 ) {
-  // Debug logging - indicate presence without logging sensitive values
-  console.log("Auth Debug:", {
-    authHeader: req.headers.authorization ? "present" : "missing",
-    apiKeyQuery: req.query.apiKey ? "present" : "missing",
-    vaultId: req.query.vaultId,
-    vaultUrl: req.query.vaultUrl,
-    path: req.path,
-  });
-
   const result = extractCredentials(
     req.headers.authorization,
     req.query.apiKey as string | undefined
@@ -214,7 +205,6 @@ export function authenticateBearer(
     }
 
     if (anonApiKey && anonVaultId && anonVaultUrl) {
-      console.log("No credentials provided, entering anonymous mode");
       req.isAnonymousMode = true;
       req.skyflowCredentials = { apiKey: anonApiKey };
       req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
@@ -222,15 +212,10 @@ export function authenticateBearer(
     }
 
     // Anonymous mode not configured, return 401
-    console.log("Credentials not found:", result.error);
     return res.status(401).json({ error: result.error });
   }
 
   req.isAnonymousMode = false;
-  const credentialType = result.credentials && "token" in result.credentials
-    ? "bearer token (JWT)"
-    : "API key";
-  console.log("Credentials found, type:", credentialType);
   req.skyflowCredentials = result.credentials;
   next();
 }

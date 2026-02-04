@@ -621,7 +621,6 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
     // Use anonymous mode configuration
     vaultId = req.anonVaultConfig.vaultId;
     vaultUrl = req.anonVaultConfig.vaultUrl;
-    console.log("Using anonymous mode vault configuration");
   } else {
     // Use client-provided or environment configuration
     vaultId = (req.query.vaultId as string) || process.env.VAULT_ID;
@@ -664,7 +663,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
       ],
     });
   } catch (error) {
-    console.log("Skyflow SDK initialization failed:", error instanceof Error ? error.message : "Unknown error");
+    console.warn("Skyflow SDK initialization failed:", error instanceof Error ? error.message : "Unknown error");
     return res.status(401).json({
       error: "Invalid credentials. Please provide valid Skyflow bearer token or API key."
     });

@@ -239,8 +239,11 @@ All tools return both text and structured content:
 return {
   content: [{ type: "text", text: JSON.stringify(output) }],
   structuredContent: output,
+  isError: true, // Optional: set to true when tool returns an error condition
 };
 ```
+
+The `isError` property is set to `true` when a tool returns an error condition (e.g., when `rehydrate` or `dehydrate_file` are called in anonymous mode, or when Skyflow API returns an error). This allows MCP clients to distinguish between successful responses and error responses.
 
 ## Dependencies
 
