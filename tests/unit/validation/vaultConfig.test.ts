@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   extractClusterId,
   validateVaultConfig,
+  looksLikePlaceholder,
 } from "../../../src/lib/validation/vaultConfig";
 
 describe("Vault Configuration Validation", () => {
@@ -211,6 +212,108 @@ describe("Vault Configuration Validation", () => {
         expect(result.isValid).toBe(true);
         expect(result.config?.accountId).toBe("account");
         expect(result.config?.workspaceId).toBe("workspace");
+      });
+    });
+  });
+
+  describe("looksLikePlaceholder()", () => {
+    describe("shell-style placeholders ${VAR_NAME}", () => {
+      it("should detect ${SKYFLOW_VAULT_ID} as placeholder", () => {
+        expect(looksLikePlaceholder("${SKYFLOW_VAULT_ID}")).toBe(true);
+      });
+
+      it("should detect ${SKYFLOW_VAULT_URL} as placeholder", () => {
+        expect(looksLikePlaceholder("${SKYFLOW_VAULT_URL}")).toBe(true);
+      });
+
+      it("should detect ${VAULT_ID} as placeholder", () => {
+        expect(looksLikePlaceholder("${VAULT_ID}")).toBe(true);
+      });
+
+      it("should detect ${MY_VAR_123} as placeholder", () => {
+        expect(looksLikePlaceholder("${MY_VAR_123}")).toBe(true);
+      });
+
+      it("should detect lowercase ${my_var} as placeholder", () => {
+        expect(looksLikePlaceholder("${my_var}")).toBe(true);
+      });
+    });
+
+    describe("direct env var style $VAR_NAME", () => {
+      it("should detect $SKYFLOW_VAULT_ID as placeholder", () => {
+        expect(looksLikePlaceholder("$SKYFLOW_VAULT_ID")).toBe(true);
+      });
+
+      it("should detect $VAULT_URL as placeholder", () => {
+        expect(looksLikePlaceholder("$VAULT_URL")).toBe(true);
+      });
+    });
+
+    describe("mustache/handlebars style {{VAR_NAME}}", () => {
+      it("should detect {{VAULT_ID}} as placeholder", () => {
+        expect(looksLikePlaceholder("{{VAULT_ID}}")).toBe(true);
+      });
+
+      it("should detect {{vault_url}} as placeholder", () => {
+        expect(looksLikePlaceholder("{{vault_url}}")).toBe(true);
+      });
+    });
+
+    describe("Windows-style %VAR_NAME%", () => {
+      it("should detect %VAULT_ID% as placeholder", () => {
+        expect(looksLikePlaceholder("%VAULT_ID%")).toBe(true);
+      });
+
+      it("should detect %SKYFLOW_VAULT_URL% as placeholder", () => {
+        expect(looksLikePlaceholder("%SKYFLOW_VAULT_URL%")).toBe(true);
+      });
+    });
+
+    describe("valid values (not placeholders)", () => {
+      it("should return false for actual vault IDs", () => {
+        expect(looksLikePlaceholder("abc123def456")).toBe(false);
+      });
+
+      it("should return false for actual vault URLs", () => {
+        expect(looksLikePlaceholder("https://abc123.vault.skyflowapis.com")).toBe(false);
+      });
+
+      it("should return false for URLs without protocol", () => {
+        expect(looksLikePlaceholder("abc123.vault.skyflowapis.com")).toBe(false);
+      });
+
+      it("should return false for UUIDs", () => {
+        expect(looksLikePlaceholder("a1b2c3d4-e5f6-7890-abcd-ef1234567890")).toBe(false);
+      });
+
+      it("should return false for regular strings", () => {
+        expect(looksLikePlaceholder("my-vault-id")).toBe(false);
+      });
+
+      it("should return false for strings containing $ but not as placeholder", () => {
+        expect(looksLikePlaceholder("price$100")).toBe(false);
+      });
+    });
+
+    describe("edge cases", () => {
+      it("should return false for undefined", () => {
+        expect(looksLikePlaceholder(undefined)).toBe(false);
+      });
+
+      it("should return false for empty string", () => {
+        expect(looksLikePlaceholder("")).toBe(false);
+      });
+
+      it("should return false for partial placeholder patterns", () => {
+        expect(looksLikePlaceholder("${")).toBe(false);
+        expect(looksLikePlaceholder("${}")).toBe(false);
+        expect(looksLikePlaceholder("{{}}")).toBe(false);
+        expect(looksLikePlaceholder("%%")).toBe(false);
+      });
+
+      it("should return false for placeholder embedded in text", () => {
+        expect(looksLikePlaceholder("prefix${VAR}suffix")).toBe(false);
+        expect(looksLikePlaceholder("https://${CLUSTER}.vault.skyflowapis.com")).toBe(false);
       });
     });
   });

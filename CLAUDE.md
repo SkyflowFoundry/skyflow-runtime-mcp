@@ -32,14 +32,14 @@ pnpm inspector   # Start only the MCP Inspector
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \
+  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
 # Call dehydrate tool
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer {your_bearer_token}" \
+  -H "Authorization: Bearer {your_bearer_token}" \ # gitleaks:allow
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john.doe@example.com"}},"id":2}'
 ```
 
@@ -132,12 +132,12 @@ https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={a
 ```
 With header:
 ```
-Authorization: Bearer {your_skyflow_bearer_token}
+Authorization: Bearer {your_skyflow_bearer_token} # gitleaks:allow
 ```
 
 Fallback method (API key via query parameter):
 ```
-https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}&apiKey={your_skyflow_api_key}
+https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}&apiKey={your_skyflow_api_key} # gitleaks:allow
 ```
 
 ## Anonymous Mode
@@ -165,6 +165,22 @@ When no credentials are provided in a request, the server can operate in "anonym
 
 **Rate Limiting**:
 Anonymous mode requests are rate-limited based on client IP address. When the limit is exceeded, a 429 response is returned with `X-RateLimit-*` headers indicating when the limit resets.
+
+**Placeholder Value Fallback**:
+The server automatically falls back to anonymous mode when query parameters contain unsubstituted template placeholders. This handles cases where users configure the MCP server URL with environment variable templates that don't get substituted:
+
+```text
+?vaultId=${SKYFLOW_VAULT_ID}&vaultUrl=${SKYFLOW_VAULT_URL}
+```
+
+Detected placeholder patterns:
+
+- `${VAR_NAME}` - shell/env var style (most common)
+- `$VAR_NAME` - direct env var reference
+- `{{VAR_NAME}}` - mustache/handlebars style
+- `%VAR_NAME%` - Windows env var style
+
+When placeholders are detected and anonymous mode is configured, the server logs a message and uses the anonymous mode vault configuration instead.
 
 ## Port Configuration
 

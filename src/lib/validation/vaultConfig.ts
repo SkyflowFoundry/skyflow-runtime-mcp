@@ -13,6 +13,39 @@ export interface ValidationResult {
 }
 
 /**
+ * Check if a value looks like an unsubstituted template placeholder
+ * Detects patterns like ${VAR_NAME}, $VAR_NAME, {{VAR}}, %VAR%
+ *
+ * @param value - The string to check
+ * @returns true if the value appears to be an unsubstituted placeholder
+ *
+ * @example
+ * looksLikePlaceholder("${SKYFLOW_VAULT_ID}") // => true
+ * looksLikePlaceholder("$VAULT_ID") // => true
+ * looksLikePlaceholder("{{vault_id}}") // => true
+ * looksLikePlaceholder("%VAULT_ID%") // => true
+ * looksLikePlaceholder("abc123") // => false
+ * looksLikePlaceholder("https://abc.vault.skyflowapis.com") // => false
+ */
+export function looksLikePlaceholder(value: string | undefined): boolean {
+  if (!value) return false;
+
+  // ${VAR_NAME} - shell/env var style (most common)
+  if (/^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(value)) return true;
+
+  // $VAR_NAME - direct env var reference
+  if (/^\$[A-Z_][A-Z0-9_]*$/i.test(value)) return true;
+
+  // {{VAR_NAME}} - mustache/handlebars style
+  if (/^\{\{[A-Z_][A-Z0-9_]*\}\}$/i.test(value)) return true;
+
+  // %VAR_NAME% - Windows env var style
+  if (/^%[A-Z_][A-Z0-9_]*%$/i.test(value)) return true;
+
+  return false;
+}
+
+/**
  * Extract clusterId from vaultUrl
  * Pure function - easy to test!
  *

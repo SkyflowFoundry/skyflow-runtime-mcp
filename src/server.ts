@@ -25,7 +25,7 @@ import {
   getMaskingMethodEnum,
   getTranscriptionEnum,
 } from "./lib/mappings/entityMaps.js";
-import { validateVaultConfig } from "./lib/validation/vaultConfig.js";
+import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
   createAnonymousRateLimiter,
@@ -624,8 +624,31 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
   // Determine vault configuration based on mode
   let vaultId: string | undefined;
   let vaultUrl: string | undefined;
+  let useAnonymousMode = req.isAnonymousMode;
 
-  if (req.isAnonymousMode && req.anonVaultConfig) {
+  // Check if query params contain unsubstituted placeholder values (e.g., ${SKYFLOW_VAULT_ID})
+  const queryVaultId = req.query.vaultId as string | undefined;
+  const queryVaultUrl = req.query.vaultUrl as string | undefined;
+  const hasPlaceholderParams =
+    looksLikePlaceholder(queryVaultId) || looksLikePlaceholder(queryVaultUrl);
+
+  if (hasPlaceholderParams && !req.isAnonymousMode) {
+    // Query params contain placeholders - check if anonymous mode is available as fallback
+    const anonApiKey = process.env.ANON_MODE_API_KEY;
+    const anonVaultId = process.env.ANON_MODE_VAULT_ID;
+    const anonVaultUrl = process.env.ANON_MODE_VAULT_URL;
+
+    if (anonApiKey && anonVaultId && anonVaultUrl) {
+      console.log(
+        "Detected placeholder values in vaultId/vaultUrl query params, falling back to anonymous mode"
+      );
+      useAnonymousMode = true;
+      req.skyflowCredentials = { apiKey: anonApiKey };
+      req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
+    }
+  }
+
+  if (useAnonymousMode && req.anonVaultConfig) {
     // Use anonymous mode configuration
     vaultId = req.anonVaultConfig.vaultId;
     vaultUrl = req.anonVaultConfig.vaultUrl;
@@ -693,7 +716,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
     {
       skyflow: skyflowInstance,
       vaultId: validatedVaultId,
-      isAnonymousMode: req.isAnonymousMode,
+      isAnonymousMode: useAnonymousMode,
     },
     async () => {
       await server.connect(transport);
