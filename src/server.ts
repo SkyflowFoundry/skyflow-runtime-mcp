@@ -645,6 +645,11 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
       useAnonymousMode = true;
       req.skyflowCredentials = { apiKey: anonApiKey };
       req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
+    } else {
+      return res.status(400).json({
+        error:
+          "Configuration error: Query parameters contain unsubstituted placeholders (e.g., ${SKYFLOW_VAULT_ID}). Please set your SKYFLOW_VAULT_ID and SKYFLOW_VAULT_URL environment variables, or contact the developer if anonymous mode is not working.",
+      });
     }
   }
 
