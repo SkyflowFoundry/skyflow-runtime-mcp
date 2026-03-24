@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow sample/test tokens used in documentation and tests"
+
+paths = [
+  '''tests/unit/middleware/authenticateBearer\.test\.ts''',
+]
+
+regexTarget = "line"
+regexes = [
+  '''gitleaks:allow''',
+]
