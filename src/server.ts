@@ -82,9 +82,15 @@ const DEHYDRATE_RESOURCE_URI = "ui://dehydrate/mcp-app.html";
 const REHYDRATE_RESOURCE_URI = "ui://rehydrate/mcp-app.html";
 const DEHYDRATE_FILE_RESOURCE_URI = "ui://dehydrate-file/mcp-app.html";
 
-// Helper to read a built UI HTML file
+// Helper to read a built UI HTML file, cached lazily on first request
+const uiHtmlCache = new Map<string, string>();
 async function readUiHtml(toolDir: string): Promise<string> {
-  return fs.readFile(path.join(DIST_UI_DIR, toolDir, "mcp-app.html"), "utf-8");
+  let cached = uiHtmlCache.get(toolDir);
+  if (!cached) {
+    cached = await fs.readFile(path.join(DIST_UI_DIR, toolDir, "mcp-app.html"), "utf-8");
+    uiHtmlCache.set(toolDir, cached);
+  }
+  return cached;
 }
 
 // Register UI resources for each tool

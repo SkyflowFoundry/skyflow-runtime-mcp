@@ -43,6 +43,8 @@ interface TokenMapping {
   originalValue: string;
   inputStart: number;
   inputEnd: number;
+  outputStart: number;
+  outputEnd: number;
 }
 
 function buildTokenMappings(inputText: string, processedText: string): TokenMapping[] {
@@ -96,6 +98,8 @@ function buildTokenMappings(inputText: string, processedText: string): TokenMapp
       originalValue,
       inputStart: t.start,
       inputEnd: t.end,
+      outputStart: processedPos,
+      outputEnd: replacementEnd,
     });
 
     inputPos = t.end;
@@ -129,38 +133,25 @@ function highlightTokensInInput(text: string, mappings: TokenMapping[]): string 
 }
 
 function highlightValuesInOutput(text: string, mappings: TokenMapping[]): string {
-  // Find each original value in the processed text and highlight it
-  const highlights: { start: number; end: number; entityType: string; token: string }[] = [];
-  let searchPos = 0;
+  // Use computed output positions from buildTokenMappings instead of indexOf
+  const sorted = [...mappings]
+    .filter((m) => m.originalValue)
+    .sort((a, b) => a.outputStart - b.outputStart);
 
-  for (const m of mappings) {
-    if (!m.originalValue) continue;
-    const idx = text.indexOf(m.originalValue, searchPos);
-    if (idx >= 0) {
-      highlights.push({
-        start: idx,
-        end: idx + m.originalValue.length,
-        entityType: m.entityType,
-        token: m.token,
-      });
-      searchPos = idx + m.originalValue.length;
-    }
-  }
-
-  highlights.sort((a, b) => a.start - b.start);
   let html = "";
   let pos = 0;
 
-  for (const h of highlights) {
-    if (h.start > pos) {
-      html += escapeHtml(text.slice(pos, h.start));
+  for (const m of sorted) {
+    if (m.outputStart < pos) continue; // skip overlapping
+    if (m.outputStart > pos) {
+      html += escapeHtml(text.slice(pos, m.outputStart));
     }
-    const cls = getEntityClass(h.entityType);
-    const label = h.entityType.replace(/_/g, " ");
-    html += `<span class="entity-highlight ${cls}" title="${escapeHtml(label)}: ${escapeHtml(h.token)}">`;
-    html += escapeHtml(text.slice(h.start, h.end));
+    const cls = getEntityClass(m.entityType);
+    const label = m.entityType.replace(/_/g, " ");
+    html += `<span class="entity-highlight ${cls}" title="${escapeHtml(label)}: ${escapeHtml(m.token)}">`;
+    html += escapeHtml(text.slice(m.outputStart, m.outputEnd));
     html += `</span>`;
-    pos = h.end;
+    pos = m.outputEnd;
   }
   if (pos < text.length) {
     html += escapeHtml(text.slice(pos));
