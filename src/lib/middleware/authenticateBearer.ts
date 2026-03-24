@@ -120,15 +120,15 @@ export function extractApiKey(
  * @example
  * // JWT bearer token in header
  * extractCredentials("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", undefined) // gitleaks:allow
- * // => { isPresent: true, credentials: { token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." } }
+ * // => { isPresent: true, credentials: { token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." } } // gitleaks:allow
  *
  * // API key in header (not a JWT)
  * extractCredentials("Bearer sky-abc123-def456", undefined) // gitleaks:allow
- * // => { isPresent: true, credentials: { apiKey: "sky-abc123-def456" } }
+ * // => { isPresent: true, credentials: { apiKey: "sky-abc123-def456" } } // gitleaks:allow
  *
  * // API key in query parameter
  * extractCredentials(undefined, "my-api-key") // gitleaks:allow
- * // => { isPresent: true, credentials: { apiKey: "my-api-key" } }
+ * // => { isPresent: true, credentials: { apiKey: "my-api-key" } } // gitleaks:allow
  *
  * extractCredentials(undefined, undefined)
  * // => { isPresent: false, error: "..." }
