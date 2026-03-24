@@ -1,20 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleDehydrate } from "../../../src/lib/tools/dehydrate";
+import type { DehydrateOutput, DehydrateErrorOutput } from "../../../src/lib/tools/types";
 
 // Mock the skyflow-node SDK
 const mockSetDefault = vi.fn();
 const mockSetTokenFormat = vi.fn();
 const mockDeidentifyText = vi.fn();
 
-vi.mock("skyflow-node", () => ({
-  TokenFormat: vi.fn(function (this: any) { this.setDefault = mockSetDefault; }),
-  TokenType: {
-    VAULT_TOKEN: "VAULT_TOKEN",
-    ENTITY_UNIQUE_COUNTER: "ENTITY_UNIQUE_COUNTER",
-  },
-  DeidentifyTextOptions: vi.fn(function (this: any) { this.setTokenFormat = mockSetTokenFormat; }),
-  DeidentifyTextRequest: vi.fn(function (this: any, input: string) { this.input = input; }),
-}));
+vi.mock("skyflow-node", () => {
+  class MockSkyflowError extends Error {
+    error: { http_code?: number; details?: unknown };
+    constructor(message: string, httpCode?: number, details?: unknown) {
+      super(message);
+      this.name = "SkyflowError";
+      this.error = { http_code: httpCode, details };
+    }
+  }
+  return {
+    TokenFormat: vi.fn(function (this: any) { this.setDefault = mockSetDefault; }),
+    TokenType: {
+      VAULT_TOKEN: "VAULT_TOKEN",
+      ENTITY_UNIQUE_COUNTER: "ENTITY_UNIQUE_COUNTER",
+    },
+    DeidentifyTextOptions: vi.fn(function (this: any) { this.setTokenFormat = mockSetTokenFormat; }),
+    DeidentifyTextRequest: vi.fn(function (this: any, input: string) { this.input = input; }),
+    SkyflowError: MockSkyflowError,
+  };
+});
 
 function createMockSkyflow(response: {
   processedText: string;
@@ -61,30 +73,34 @@ describe("handleDehydrate", () => {
     it("should return correct output shape with all fields", async () => {
       const skyflow = createMockSkyflow(mockResponse);
       const result = await handleDehydrate("My email is john@example.com", skyflow as any, false);
+      const output = result.output as DehydrateOutput;
 
-      expect(result).toHaveProperty("inputText");
-      expect(result).toHaveProperty("processedText");
-      expect(result).toHaveProperty("wordCount");
-      expect(result).toHaveProperty("charCount");
-      expect(result).toHaveProperty("entities");
-      expect(result.anonymousMode).toBeUndefined();
-      expect(result.note).toBeUndefined();
+      expect(result.isError).toBeUndefined();
+      expect(output).toHaveProperty("inputText");
+      expect(output).toHaveProperty("processedText");
+      expect(output).toHaveProperty("wordCount");
+      expect(output).toHaveProperty("charCount");
+      expect(output).toHaveProperty("entities");
+      expect(output.anonymousMode).toBeUndefined();
+      expect(output.note).toBeUndefined();
     });
 
     it("should pass through inputText from the original input", async () => {
       const skyflow = createMockSkyflow(mockResponse);
       const input = "My email is john@example.com";
       const result = await handleDehydrate(input, skyflow as any, false);
+      const output = result.output as DehydrateOutput;
 
-      expect(result.inputText).toBe(input);
+      expect(output.inputText).toBe(input);
     });
 
     it("should expose entity metadata with token, value, entity, positions, and scores", async () => {
       const skyflow = createMockSkyflow(mockResponse);
       const result = await handleDehydrate("My email is john@example.com", skyflow as any, false);
+      const output = result.output as DehydrateOutput;
 
-      expect(result.entities).toHaveLength(1);
-      const entity = result.entities[0];
+      expect(output.entities).toHaveLength(1);
+      const entity = output.entities[0];
       expect(entity.token).toBe("[EMAIL_ADDRESS_abc123]");
       expect(entity.value).toBe("john@example.com");
       expect(entity.entity).toBe("email_address");
@@ -108,8 +124,9 @@ describe("handleDehydrate", () => {
         entities: [],
       });
       const result = await handleDehydrate("Hello world", skyflow as any, false);
+      const output = result.output as DehydrateOutput;
 
-      expect(result.entities).toEqual([]);
+      expect(output.entities).toEqual([]);
     });
   });
 
@@ -129,9 +146,10 @@ describe("handleDehydrate", () => {
     it("should include anonymousMode flag and note", async () => {
       const skyflow = createMockSkyflow(mockResponse);
       const result = await handleDehydrate("My email is john@example.com", skyflow as any, true);
+      const output = result.output as DehydrateOutput;
 
-      expect(result.anonymousMode).toBe(true);
-      expect(result.note).toContain("anonymous mode");
+      expect(output.anonymousMode).toBe(true);
+      expect(output.note).toContain("anonymous mode");
     });
 
     it("should use ENTITY_UNIQUE_COUNTER format in anonymous mode", async () => {
@@ -139,6 +157,62 @@ describe("handleDehydrate", () => {
       await handleDehydrate("test", skyflow as any, true);
 
       expect(mockSetDefault).toHaveBeenCalledWith("ENTITY_UNIQUE_COUNTER");
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle SkyflowError with code and details", async () => {
+      const { SkyflowError } = await import("skyflow-node");
+      const skyflowError = new (SkyflowError as any)("Invalid token", 401, "Token expired");
+      mockDeidentifyText.mockRejectedValue(skyflowError);
+
+      const skyflow = {
+        detect: vi.fn(() => ({
+          deidentifyText: mockDeidentifyText,
+        })),
+      };
+
+      const result = await handleDehydrate("test input", skyflow as any, false);
+      const output = result.output as DehydrateErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.error).toBe(true);
+      expect(output.message).toBe("Invalid token");
+      expect(output.code).toBe(401);
+      expect(output.details).toBe("Token expired");
+    });
+
+    it("should handle generic errors with message", async () => {
+      mockDeidentifyText.mockRejectedValue(new Error("Network timeout"));
+
+      const skyflow = {
+        detect: vi.fn(() => ({
+          deidentifyText: mockDeidentifyText,
+        })),
+      };
+
+      const result = await handleDehydrate("test input", skyflow as any, false);
+      const output = result.output as DehydrateErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.error).toBe(true);
+      expect(output.message).toBe("Network timeout");
+    });
+
+    it("should handle non-Error thrown values", async () => {
+      mockDeidentifyText.mockRejectedValue("string error");
+
+      const skyflow = {
+        detect: vi.fn(() => ({
+          deidentifyText: mockDeidentifyText,
+        })),
+      };
+
+      const result = await handleDehydrate("test input", skyflow as any, false);
+      const output = result.output as DehydrateErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.message).toBe("Unknown error occurred");
     });
   });
 });

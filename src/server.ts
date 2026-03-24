@@ -139,14 +139,19 @@ registerAppTool(
         .string()
         .optional()
         .describe("Additional information about the response, such as anonymous mode limitations"),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      message: z.string().optional().describe("Detailed error message"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
     _meta: { ui: { resourceUri: DEHYDRATE_RESOURCE_URI } },
   },
   async ({ inputString }) => {
-    const output = await handleDehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
+    const result = await handleDehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
-      content: [{ type: "text", text: JSON.stringify(output) }],
-      structuredContent: output as unknown as Record<string, unknown>,
+      content: [{ type: "text", text: JSON.stringify(result.output) }],
+      structuredContent: result.output as unknown as Record<string, unknown>,
+      ...(result.isError && { isError: true }),
     };
   }
 );
@@ -166,10 +171,12 @@ registerAppTool(
     outputSchema: {
       inputText: z.string().optional().describe("The original tokenized input text"),
       processedText: z.string().optional(),
-      error: z.string().optional().describe("Error message when tool is unavailable"),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
       anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
       message: z.string().optional().describe("Detailed error or setup instructions"),
       helpUrl: z.string().optional().describe("URL for setup documentation"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
     _meta: { ui: { resourceUri: REHYDRATE_RESOURCE_URI } },
   },

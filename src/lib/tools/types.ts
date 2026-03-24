@@ -61,6 +61,22 @@ export interface DehydrateFileOutput {
   status?: string;
 }
 
+/** Error output from dehydrate tool */
+export interface DehydrateErrorOutput {
+  error: true | string;
+  code?: number;
+  message: string;
+  details?: unknown;
+}
+
+/** Error output from rehydrate tool */
+export interface RehydrateErrorOutput {
+  error: true | string;
+  code?: number;
+  message: string;
+  details?: unknown;
+}
+
 /** Error output from file deidentification */
 export interface DehydrateFileErrorOutput {
   error: true | string;

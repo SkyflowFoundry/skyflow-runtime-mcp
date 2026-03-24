@@ -1,6 +1,6 @@
-import { ReidentifyTextRequest } from "skyflow-node";
+import { ReidentifyTextRequest, SkyflowError } from "skyflow-node";
 import type { Skyflow } from "skyflow-node";
-import type { RehydrateOutput, AnonymousModeError, ToolResult } from "./types.js";
+import type { RehydrateOutput, RehydrateErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
 
 /**
  * Handle the rehydrate tool logic.
@@ -10,7 +10,7 @@ export async function handleRehydrate(
   inputString: string,
   skyflow: Skyflow,
   anonymousMode: boolean
-): Promise<ToolResult<RehydrateOutput | AnonymousModeError>> {
+): Promise<ToolResult<RehydrateOutput | AnonymousModeError | RehydrateErrorOutput>> {
   if (anonymousMode) {
     return {
       output: {
@@ -28,14 +28,37 @@ export async function handleRehydrate(
     };
   }
 
-  const response = await skyflow
-    .detect()
-    .reidentifyText(new ReidentifyTextRequest(inputString));
+  try {
+    const response = await skyflow
+      .detect()
+      .reidentifyText(new ReidentifyTextRequest(inputString));
 
-  return {
-    output: {
-      inputText: inputString,
-      processedText: response.processedText,
-    },
-  };
+    return {
+      output: {
+        inputText: inputString,
+        processedText: response.processedText,
+      },
+    };
+  } catch (error) {
+    if (error instanceof SkyflowError) {
+      return {
+        output: {
+          error: true,
+          code: typeof error.error?.http_code === "number" ? error.error.http_code : undefined,
+          message: error.message,
+          details: error.error?.details,
+        },
+        isError: true,
+      };
+    } else {
+      return {
+        output: {
+          error: true,
+          message:
+            error instanceof Error ? error.message : "Unknown error occurred",
+        },
+        isError: true,
+      };
+    }
+  }
 }

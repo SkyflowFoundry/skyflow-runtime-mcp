@@ -1,13 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleRehydrate } from "../../../src/lib/tools/rehydrate";
-import type { RehydrateOutput, AnonymousModeError } from "../../../src/lib/tools/types";
+import type { RehydrateOutput, RehydrateErrorOutput, AnonymousModeError } from "../../../src/lib/tools/types";
 
 // Mock the skyflow-node SDK
 const mockReidentifyText = vi.fn();
 
-vi.mock("skyflow-node", () => ({
-  ReidentifyTextRequest: vi.fn(function (this: any, input: string) { this.input = input; }),
-}));
+vi.mock("skyflow-node", () => {
+  class MockSkyflowError extends Error {
+    error: { http_code?: number; details?: unknown };
+    constructor(message: string, httpCode?: number, details?: unknown) {
+      super(message);
+      this.name = "SkyflowError";
+      this.error = { http_code: httpCode, details };
+    }
+  }
+  return {
+    ReidentifyTextRequest: vi.fn(function (this: any, input: string) { this.input = input; }),
+    SkyflowError: MockSkyflowError,
+  };
+});
 
 function createMockSkyflow(response: { processedText: string }) {
   return {
@@ -74,6 +85,62 @@ describe("handleRehydrate", () => {
       await handleRehydrate("test", skyflow as any, true);
 
       expect((skyflow as any).detect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle SkyflowError with code and details", async () => {
+      const { SkyflowError } = await import("skyflow-node");
+      const skyflowError = new (SkyflowError as any)("Token not found", 404, "No matching token");
+      mockReidentifyText.mockRejectedValue(skyflowError);
+
+      const skyflow = {
+        detect: vi.fn(() => ({
+          reidentifyText: mockReidentifyText,
+        })),
+      };
+
+      const result = await handleRehydrate("test input", skyflow as any, false);
+      const output = result.output as RehydrateErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.error).toBe(true);
+      expect(output.message).toBe("Token not found");
+      expect(output.code).toBe(404);
+      expect(output.details).toBe("No matching token");
+    });
+
+    it("should handle generic errors with message", async () => {
+      mockReidentifyText.mockRejectedValue(new Error("Network timeout"));
+
+      const skyflow = {
+        detect: vi.fn(() => ({
+          reidentifyText: mockReidentifyText,
+        })),
+      };
+
+      const result = await handleRehydrate("test input", skyflow as any, false);
+      const output = result.output as RehydrateErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.error).toBe(true);
+      expect(output.message).toBe("Network timeout");
+    });
+
+    it("should handle non-Error thrown values", async () => {
+      mockReidentifyText.mockRejectedValue("string error");
+
+      const skyflow = {
+        detect: vi.fn(() => ({
+          reidentifyText: mockReidentifyText,
+        })),
+      };
+
+      const result = await handleRehydrate("test input", skyflow as any, false);
+      const output = result.output as RehydrateErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.message).toBe("Unknown error occurred");
     });
   });
 });
