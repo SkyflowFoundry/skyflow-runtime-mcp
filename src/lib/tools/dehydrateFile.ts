@@ -183,7 +183,7 @@ export async function handleDehydrateFile(
       return {
         output: {
           error: true,
-          code: error.error?.http_code,
+          code: typeof error.error?.http_code === "number" ? error.error.http_code : undefined,
           message: error.message,
           details: error.error?.details,
         },

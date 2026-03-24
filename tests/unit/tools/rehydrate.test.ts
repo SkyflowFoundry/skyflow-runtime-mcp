@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleRehydrate } from "../../../src/lib/tools/rehydrate";
+import type { RehydrateOutput, AnonymousModeError } from "../../../src/lib/tools/types";
 
 // Mock the skyflow-node SDK
 const mockReidentifyText = vi.fn();
@@ -36,15 +37,17 @@ describe("handleRehydrate", () => {
       const skyflow = createMockSkyflow({ processedText: "restored text" });
       const input = "tokenized input [SSN_abc123]";
       const result = await handleRehydrate(input, skyflow as any, false);
+      const output = result.output as RehydrateOutput;
 
-      expect((result.output as any).inputText).toBe(input);
+      expect(output.inputText).toBe(input);
     });
 
     it("should return the restored text from Skyflow", async () => {
       const skyflow = createMockSkyflow({ processedText: "My SSN is 123-45-6789" });
       const result = await handleRehydrate("My SSN is [SSN_abc123]", skyflow as any, false);
+      const output = result.output as RehydrateOutput;
 
-      expect((result.output as any).processedText).toBe("My SSN is 123-45-6789");
+      expect(output.processedText).toBe("My SSN is 123-45-6789");
     });
   });
 
@@ -60,9 +63,10 @@ describe("handleRehydrate", () => {
     it("should include setup instructions in error message", async () => {
       const skyflow = createMockSkyflow({ processedText: "" });
       const result = await handleRehydrate("test", skyflow as any, true);
+      const output = result.output as AnonymousModeError;
 
-      expect((result.output as any).message).toContain("Skyflow credentials");
-      expect((result.output as any).message).toContain("Authorization header");
+      expect(output.message).toContain("Skyflow credentials");
+      expect(output.message).toContain("Authorization header");
     });
 
     it("should not call the Skyflow API in anonymous mode", async () => {

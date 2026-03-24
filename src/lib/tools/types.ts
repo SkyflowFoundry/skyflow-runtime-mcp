@@ -10,7 +10,6 @@ export interface EntityInfo {
 
 /** Output from the dehydrate tool handler */
 export interface DehydrateOutput {
-  [x: string]: unknown;
   inputText: string;
   processedText: string;
   wordCount: number;
@@ -22,14 +21,12 @@ export interface DehydrateOutput {
 
 /** Output from the rehydrate tool handler */
 export interface RehydrateOutput {
-  [x: string]: unknown;
   inputText: string;
   processedText: string;
 }
 
 /** Error output for tools that don't support anonymous mode */
 export interface AnonymousModeError {
-  [x: string]: unknown;
   error: string;
   anonymousModeRestricted: true;
   message: string;
@@ -45,7 +42,6 @@ export interface DetectedEntityItem {
 
 /** Output from the dehydrate_file tool handler */
 export interface DehydrateFileOutput {
-  [x: string]: unknown;
   inputFileName?: string;
   inputMimeType?: string;
   processedFileData?: string;
@@ -67,7 +63,6 @@ export interface DehydrateFileOutput {
 
 /** Error output from file deidentification */
 export interface DehydrateFileErrorOutput {
-  [x: string]: unknown;
   error: true | string;
   code?: number;
   message: string;

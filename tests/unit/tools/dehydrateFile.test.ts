@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { handleDehydrateFile, DEFAULT_MAX_WAIT_TIME_SECONDS } from "../../../src/lib/tools/dehydrateFile";
-import type { DehydrateFileArgs } from "../../../src/lib/tools/types";
+import type { DehydrateFileArgs, DehydrateFileOutput, DehydrateFileErrorOutput, AnonymousModeError } from "../../../src/lib/tools/types";
 
 // Mock the skyflow-node SDK
 const mockSetEntities = vi.fn();
@@ -78,8 +78,9 @@ describe("handleDehydrateFile", () => {
     it("should suggest dehydrate as alternative tool", async () => {
       const skyflow = createMockSkyflow();
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", true);
+      const output = result.output as AnonymousModeError;
 
-      expect((result.output as any).alternativeTool).toBe("dehydrate");
+      expect(output.alternativeTool).toBe("dehydrate");
     });
 
     it("should not call the Skyflow API in anonymous mode", async () => {
@@ -94,10 +95,11 @@ describe("handleDehydrateFile", () => {
     it("should include inputFileName and inputMimeType in output", async () => {
       const skyflow = createMockSkyflow({});
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DehydrateFileOutput;
 
       expect(result.isError).toBeUndefined();
-      expect((result.output as any).inputFileName).toBe("test.png");
-      expect((result.output as any).inputMimeType).toBe("image/png");
+      expect(output.inputFileName).toBe("test.png");
+      expect(output.inputMimeType).toBe("image/png");
     });
 
     it("should set outputProcessedImage for image mime types", async () => {
@@ -175,7 +177,7 @@ describe("handleDehydrateFile", () => {
         status: "completed",
       });
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as any;
+      const output = result.output as DehydrateFileOutput;
 
       expect(output.processedFileData).toBe("base64data");
       expect(output.mimeType).toBe("image/png");
@@ -194,7 +196,7 @@ describe("handleDehydrateFile", () => {
     it("should omit optional fields when not in response", async () => {
       const skyflow = createMockSkyflow({});
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as any;
+      const output = result.output as DehydrateFileOutput;
 
       expect(output.processedFileData).toBeUndefined();
       expect(output.wordCount).toBeUndefined();
@@ -216,12 +218,13 @@ describe("handleDehydrateFile", () => {
       };
 
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DehydrateFileErrorOutput;
 
       expect(result.isError).toBe(true);
-      expect((result.output as any).error).toBe(true);
-      expect((result.output as any).message).toBe("Vault not found");
-      expect((result.output as any).code).toBe(404);
-      expect((result.output as any).details).toBe("Details here");
+      expect(output.error).toBe(true);
+      expect(output.message).toBe("Vault not found");
+      expect(output.code).toBe(404);
+      expect(output.details).toBe("Details here");
     });
 
     it("should handle generic errors with message", async () => {
@@ -234,10 +237,11 @@ describe("handleDehydrateFile", () => {
       };
 
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DehydrateFileErrorOutput;
 
       expect(result.isError).toBe(true);
-      expect((result.output as any).error).toBe(true);
-      expect((result.output as any).message).toBe("Network timeout");
+      expect(output.error).toBe(true);
+      expect(output.message).toBe("Network timeout");
     });
 
     it("should handle non-Error thrown values", async () => {
@@ -250,9 +254,10 @@ describe("handleDehydrateFile", () => {
       };
 
       const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DehydrateFileErrorOutput;
 
       expect(result.isError).toBe(true);
-      expect((result.output as any).message).toBe("Unknown error occurred");
+      expect(output.message).toBe("Unknown error occurred");
     });
   });
 });

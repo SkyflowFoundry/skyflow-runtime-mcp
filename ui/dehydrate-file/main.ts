@@ -1,27 +1,8 @@
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { setupHostTheming, applyInitialContext } from "../shared/theme.js";
+import type { DehydrateFileResult } from "../shared/types.js";
 import "../shared/styles.css";
-
-interface DehydrateFileResult {
-  inputFileName?: string;
-  inputMimeType?: string;
-  processedFileData?: string;
-  mimeType?: string;
-  extension?: string;
-  detectedEntities?: Array<{ file: string; extension: string }>;
-  wordCount?: number;
-  charCount?: number;
-  sizeInKb?: number;
-  durationInSeconds?: number;
-  pageCount?: number;
-  slideCount?: number;
-  runId?: string;
-  status?: string;
-  error?: string;
-  message?: string;
-  anonymousModeRestricted?: boolean;
-}
 
 const root = document.getElementById("root")!;
 

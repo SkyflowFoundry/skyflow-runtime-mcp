@@ -1,26 +1,8 @@
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { setupHostTheming, applyInitialContext } from "../shared/theme.js";
+import type { EntityInfo, DehydrateResult } from "../shared/types.js";
 import "../shared/styles.css";
-
-interface EntityInfo {
-  token?: string;
-  value?: string;
-  entity?: string;
-  textIndex?: { start?: number; end?: number };
-  processedIndex?: { start?: number; end?: number };
-  scores?: Record<string, number>;
-}
-
-interface DehydrateResult {
-  inputText?: string;
-  processedText?: string;
-  wordCount?: number;
-  charCount?: number;
-  entities?: EntityInfo[];
-  anonymousMode?: boolean;
-  note?: string;
-}
 
 const root = document.getElementById("root")!;
 
@@ -56,10 +38,6 @@ function highlightText(
     .filter((e) => e[indexKey]?.start != null && e[indexKey]?.end != null)
     .sort((a, b) => (b[indexKey]!.start ?? 0) - (a[indexKey]!.start ?? 0));
 
-  let result = escapeHtml(text);
-  // We need to work on the original text positions, then escape
-  // Re-do: work on raw text, then escape segments
-  const chars = [...text];
   const segments: { start: number; end: number; entity: string }[] = [];
 
   for (const e of sorted) {
@@ -76,6 +54,7 @@ function highlightText(
   let html = "";
   let pos = 0;
   for (const seg of segments) {
+    if (seg.start < pos) continue; // skip overlapping segment
     if (seg.start > pos) {
       html += escapeHtml(text.slice(pos, seg.start));
     }

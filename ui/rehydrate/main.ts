@@ -1,15 +1,8 @@
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { setupHostTheming, applyInitialContext } from "../shared/theme.js";
+import type { RehydrateResult } from "../shared/types.js";
 import "../shared/styles.css";
-
-interface RehydrateResult {
-  inputText?: string;
-  processedText?: string;
-  error?: string;
-  message?: string;
-  anonymousModeRestricted?: boolean;
-}
 
 const root = document.getElementById("root")!;
 

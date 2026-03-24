@@ -1,7 +1,7 @@
 {
-	"name": "sky-mcp",
+	"name": "skyflow-runtime-mcp",
 	"version": "1.0.0",
-	"description": "Skyflow MCP Integration",
+	"description": "Skyflow Runtime MCP Server",
 	"type": "module",
 	"main": "dist/server.js",
 	"scripts": {

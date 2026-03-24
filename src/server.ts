@@ -140,7 +140,7 @@ registerAppTool(
     const output = await handleDehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(output) }],
-      structuredContent: output,
+      structuredContent: output as unknown as Record<string, unknown>,
     };
   }
 );
@@ -158,8 +158,12 @@ registerAppTool(
       "Rehydrate previously dehydrated sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data.",
     inputSchema: { inputString: z.string().min(1).describe("Original Text — paste the tokenized text you want to restore") },
     outputSchema: {
-      inputText: z.string().describe("The original tokenized input text"),
-      processedText: z.string(),
+      inputText: z.string().optional().describe("The original tokenized input text"),
+      processedText: z.string().optional(),
+      error: z.string().optional().describe("Error message when tool is unavailable"),
+      anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
+      message: z.string().optional().describe("Detailed error or setup instructions"),
+      helpUrl: z.string().optional().describe("URL for setup documentation"),
     },
     _meta: { ui: { resourceUri: REHYDRATE_RESOURCE_URI } },
   },
@@ -167,7 +171,7 @@ registerAppTool(
     const result = await handleRehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
-      structuredContent: result.output,
+      structuredContent: result.output as unknown as Record<string, unknown>,
       ...(result.isError && { isError: true }),
     };
   }
@@ -350,13 +354,20 @@ registerAppTool(
         .describe("Number of slides for presentations"),
       runId: z.string().optional().describe("Run ID for async operations"),
       status: z.string().optional().describe("Status of the operation"),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+      anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
+      message: z.string().optional().describe("Detailed error or setup instructions"),
+      helpUrl: z.string().optional().describe("URL for setup documentation"),
+      alternativeTool: z.string().optional().describe("Suggested alternative tool to use"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
   },
   async (args) => {
     const result = await handleDehydrateFile(args, getCurrentSkyflow(), getCurrentVaultId(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
-      structuredContent: result.output,
+      structuredContent: result.output as unknown as Record<string, unknown>,
       ...(result.isError && { isError: true }),
     };
   }
