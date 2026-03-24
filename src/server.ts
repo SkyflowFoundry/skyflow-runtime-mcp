@@ -2,11 +2,17 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 import {
   McpServer,
-  ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  registerAppTool,
+  registerAppResource,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
 import express, { type Express } from "express";
 import { z } from "zod";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   DeidentifyTextOptions,
   DeidentifyTextRequest,
@@ -44,6 +50,8 @@ interface DetectedEntityItem {
 /** TypeScript interface for dehydrate file output */
 interface DeidentifyFileOutput {
   [x: string]: unknown;
+  inputFileName?: string;
+  inputMimeType?: string;
   processedFileData?: string;
   mimeType?: string;
   extension?: string;
@@ -112,11 +120,36 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
+// MCP Apps: Resource URIs and UI directory
+const DIST_UI_DIR = path.resolve(import.meta.dirname, "..", "dist", "ui");
+const DEHYDRATE_RESOURCE_URI = "ui://dehydrate/mcp-app.html";
+const REHYDRATE_RESOURCE_URI = "ui://rehydrate/mcp-app.html";
+const DEHYDRATE_FILE_RESOURCE_URI = "ui://dehydrate-file/mcp-app.html";
+
+// Helper to read a built UI HTML file
+async function readUiHtml(toolDir: string): Promise<string> {
+  return fs.readFile(path.join(DIST_UI_DIR, toolDir, "mcp-app.html"), "utf-8");
+}
+
+// Register UI resources for each tool
+registerAppResource(server, "Dehydrate UI", DEHYDRATE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DEHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: await readUiHtml("dehydrate") }],
+}));
+
+registerAppResource(server, "Rehydrate UI", REHYDRATE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: REHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: await readUiHtml("rehydrate") }],
+}));
+
+registerAppResource(server, "Dehydrate File UI", DEHYDRATE_FILE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DEHYDRATE_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: await readUiHtml("dehydrate-file") }],
+}));
+
 /**
  * Skyflow Dehydrate Tool
  * Replaces sensitive information in text with placeholder tokens
  */
-server.registerTool(
+registerAppTool(
+  server,
   "dehydrate",
   {
     title: "Skyflow Dehydrate Tool",
@@ -124,9 +157,18 @@ server.registerTool(
       "Dehydrate sensitive information in strings using Skyflow. This tool accepts a string and returns another string, but with placeholders for sensitive data. The placeholders tell you what they are replacing. For example, a credit card number might be replaced with [CREDIT_CARD_abc123].",
     inputSchema: { inputString: z.string().min(1) },
     outputSchema: {
+      inputText: z.string().describe("The original input text"),
       processedText: z.string(),
       wordCount: z.number(),
       charCount: z.number(),
+      entities: z.array(z.object({
+        token: z.string().optional(),
+        value: z.string().optional(),
+        entity: z.string().optional(),
+        textIndex: z.object({ start: z.number().optional(), end: z.number().optional() }).optional(),
+        processedIndex: z.object({ start: z.number().optional(), end: z.number().optional() }).optional(),
+        scores: z.record(z.number()).optional(),
+      })).describe("Detected entities with positions and confidence scores"),
       anonymousMode: z
         .boolean()
         .optional()
@@ -136,6 +178,7 @@ server.registerTool(
         .optional()
         .describe("Additional information about the response, such as anonymous mode limitations"),
     },
+    _meta: { ui: { resourceUri: DEHYDRATE_RESOURCE_URI } },
   },
   async ({ inputString }) => {
     const anonymousMode = isAnonymousMode();
@@ -168,9 +211,18 @@ server.registerTool(
       .deidentifyText(new DeidentifyTextRequest(inputString), options);
 
     const output = {
+      inputText: inputString,
       processedText: response.processedText,
       wordCount: response.wordCount,
       charCount: response.charCount,
+      entities: response.entities.map((e) => ({
+        token: e.token,
+        value: e.value,
+        entity: e.entity,
+        textIndex: e.textIndex,
+        processedIndex: e.processedIndex,
+        scores: e.scores,
+      })),
       ...(anonymousMode && {
         anonymousMode: true,
         note: "Running in anonymous mode. Tokens are not persisted. Configure credentials for full functionality.",
@@ -188,7 +240,8 @@ server.registerTool(
  * Skyflow Rehydrate Tool
  * Restores original sensitive data from dehydrated placeholders
  */
-server.registerTool(
+registerAppTool(
+  server,
   "rehydrate",
   {
     title: "Skyflow Rehydrate Tool",
@@ -196,8 +249,10 @@ server.registerTool(
       "Rehydrate previously dehydrated sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data.",
     inputSchema: { inputString: z.string().min(1) },
     outputSchema: {
+      inputText: z.string().describe("The original tokenized input text"),
       processedText: z.string(),
     },
+    _meta: { ui: { resourceUri: REHYDRATE_RESOURCE_URI } },
   },
   async ({ inputString }) => {
     // Check if in anonymous mode
@@ -228,6 +283,7 @@ server.registerTool(
       .reidentifyText(new ReidentifyTextRequest(inputString));
 
     const output = {
+      inputText: inputString,
       processedText: response.processedText,
     };
 
@@ -243,12 +299,14 @@ server.registerTool(
  * Processes files to detect and redact sensitive information
  * Maximum file size: 5MB (due to base64 encoding overhead, original binary files should be ~3.75MB or less)
  */
-server.registerTool(
+registerAppTool(
+  server,
   "dehydrate_file",
   {
     title: "Skyflow Dehydrate File Tool",
     description:
       "Dehydrate sensitive information in files (images, PDFs, audio, documents) using Skyflow. Accepts base64-encoded file data and returns the processed file with sensitive data redacted or masked. Maximum file size: 5MB (base64-encoded). Due to base64 encoding overhead, original binary files should be approximately 3.75MB or smaller.",
+    _meta: { ui: { resourceUri: DEHYDRATE_FILE_RESOURCE_URI } },
     inputSchema: {
       fileData: z.string().min(1).describe("Base64-encoded file content"),
       fileName: z.string().describe("Original filename for type detection"),
@@ -368,6 +426,8 @@ server.registerTool(
         .describe("Wait time for response in seconds (max 64)"),
     },
     outputSchema: {
+      inputFileName: z.string().optional().describe("Original filename"),
+      inputMimeType: z.string().optional().describe("Original MIME type"),
       processedFileData: z
         .string()
         .optional()
@@ -510,7 +570,10 @@ server.registerTool(
         .deidentifyFile(fileReq, options);
 
       // Prepare the output with proper typing
-      const output: DeidentifyFileOutput = {};
+      const output: DeidentifyFileOutput = {
+        inputFileName: fileName,
+        inputMimeType: mimeType,
+      };
 
       // If there's a processed file base64, include it
       if (response.fileBase64) {
