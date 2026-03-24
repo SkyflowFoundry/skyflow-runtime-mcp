@@ -72,8 +72,8 @@ function isAnonymousMode(): boolean {
 
 // Create an MCP server
 const server = new McpServer({
-  name: "demo-server",
-  version: "1.0.0",
+  name: "Skyflow Runtime MCP Server",
+  version: "0.4.0",
 });
 
 // MCP Apps: Resource URIs and UI directory
