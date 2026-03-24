@@ -137,8 +137,47 @@ body {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 300px;
+  max-height: 500px;
   overflow-y: auto;
+}
+
+/* Tabs */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  background: var(--color-background-tertiary, #f0f0f0);
+  border-bottom: 1px solid var(--color-border-secondary, #e0e0e0);
+}
+
+.tab {
+  padding: 8px 16px;
+  font-size: var(--font-text-xs-size, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary, #666);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab:hover {
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.tab.active {
+  color: var(--color-text-primary, #1a1a2e);
+  border-bottom-color: #403e6b;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
 }
 
 /* Entity highlight spans */

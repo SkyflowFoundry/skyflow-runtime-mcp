@@ -178,10 +178,14 @@ function highlightValuesInOutput(text: string, mappings: TokenMapping[]): string
 
 function renderResult(data: RehydrateResult): void {
   if (data.error || data.anonymousModeRestricted) {
+    const isAnonymous = data.anonymousModeRestricted;
     root.innerHTML = `
       <div class="container">
         <div class="banner banner-warning">
-          ${escapeHtml(data.message || data.error || "An error occurred")}
+          ${isAnonymous ? `
+            <strong>Anonymous mode</strong>
+            <div>Currently running in unauthenticated mode using ephemeral entity tokens. Configure Skyflow credentials for full functionality.</div>
+          ` : escapeHtml(data.message || data.error || "An error occurred")}
         </div>
       </div>
     `;

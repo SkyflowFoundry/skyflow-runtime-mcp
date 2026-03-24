@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Skyflow MCP (Model Context Protocol) server that provides PII/PHI detection and redaction capabilities through a streamable HTTP transport. It's built with Express, TypeScript, and the official MCP SDK, exposing Skyflow's deidentification capabilities as MCP tools.
+This is a Skyflow MCP (Model Context Protocol) server that provides PII/PHI detection and redaction capabilities through a streamable HTTP transport. It's built with Express, TypeScript, and the official MCP SDK, exposing Skyflow's deidentification capabilities as MCP tools. Tools include interactive UIs via the MCP Apps SDK (`@modelcontextprotocol/ext-apps`) that render inline in supported hosts.
 
 ## Development Commands
 
@@ -22,6 +22,9 @@ This is the recommended way to develop. It automatically:
 ```bash
 pnpm server      # Start only the MCP server on port 3000
 pnpm inspector   # Start only the MCP Inspector
+pnpm build:ui    # Build UI apps only (vite + vite-plugin-singlefile)
+pnpm build:server # Build server only (tsc)
+pnpm build       # Build UI apps then server (required before deploy)
 ```
 
 ### Testing with curl
@@ -55,8 +58,16 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 
 **MCP Server Instance**
 - Registers three main tools: `dehydrate`, `rehydrate`, and `dehydrate_file`
+- Each tool is registered via `registerAppTool` from `@modelcontextprotocol/ext-apps/server`, linking tools to interactive UI resources
 - Each tool is defined with Zod schemas for input validation and output structure
 - Uses the official `@modelcontextprotocol/sdk` library
+
+**MCP Apps UI Layer** (`ui/`)
+- Each tool has a corresponding vanilla TypeScript UI in `ui/{dehydrate,rehydrate,dehydrate-file}/`
+- Shared theme/styles in `ui/shared/` (theme.ts, styles.css)
+- Built with Vite + `vite-plugin-singlefile` → single HTML files in `dist/ui/`
+- Resources registered via `registerAppResource` with `ui://` URIs
+- Hosts that support MCP Apps render the UI inline; text-only hosts get JSON fallback via `content`
 
 **Transport Layer - Critical Architecture Detail**
 - Creates a NEW `StreamableHTTPServerTransport` instance **per request**
@@ -75,25 +86,34 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 
 ### Tool Implementations
 
-**dehydrate tool**
+**dehydrate tool** (`src/lib/tools/dehydrate.ts`)
 - Detects and replaces sensitive information with tokens
-- Returns processed text with word/character counts
+- Returns `inputText`, `processedText`, `wordCount`, `charCount`, and `entities` array
+- Each entity includes `token`, `value`, `entity`, `textIndex`, `processedIndex`, `scores`
 - Uses `TokenFormat` with `VAULT_TOKEN` type in authenticated mode, `ENTITY_UNIQUE_COUNTER` in anonymous mode
 - In anonymous mode, adds `anonymousMode: true` and a note to the response
-- Has commented-out support for custom regex allow/restrict lists
 
-**rehydrate tool**
+**rehydrate tool** (`src/lib/tools/rehydrate.ts`)
 - Reverses dehydration by replacing tokens with original sensitive data
-- Simpler implementation than dehydrate - just calls `reidentifyText`
+- Returns `inputText` and `processedText`
+- Returns error with `anonymousModeRestricted: true` in anonymous mode
 
-**dehydrate_file tool**
+**dehydrate_file tool** (`src/lib/tools/dehydrateFile.ts`)
 - Most complex tool - handles images, PDFs, audio, and documents
+- Returns `inputFileName`, `inputMimeType`, and optional response fields from Skyflow
 - Accepts base64-encoded file data (max 5MB encoded, ~3.75MB original)
 - Supports entity-specific detection (59 entity types mapped in `ENTITY_MAP`)
 - Configurable masking methods for images (BLACKBOX, BLUR)
 - Optional outputs: processed file, OCR text, transcription for audio
 - Includes detailed error handling for `SkyflowError` instances
 - Uses `waitTime` parameter (max 64 seconds) for async operations
+- Returns error with `anonymousModeRestricted: true` in anonymous mode
+
+**Tool handler extraction pattern**
+- Core logic is in `src/lib/tools/*.ts` as pure functions with explicit parameters
+- `src/server.ts` calls these functions, passing `getCurrentSkyflow()`, `getCurrentVaultId()`, `isAnonymousMode()`
+- Shared types live in `src/lib/tools/types.ts`
+- This separation enables unit testing without `AsyncLocalStorage` context
 
 ### Type Safety Approach
 
@@ -263,12 +283,14 @@ The `isError` property is set to `true` when a tool returns an error condition (
 
 ## Dependencies
 
-- `@modelcontextprotocol/sdk`: Official MCP TypeScript SDK (v1.19.1+)
+- `@modelcontextprotocol/sdk`: Official MCP TypeScript SDK (v1.27.1+)
+- `@modelcontextprotocol/ext-apps`: MCP Apps SDK for interactive tool UIs
 - `skyflow-node`: Skyflow SDK for deidentification (v2.0.0+)
 - `express`: Web framework (v5.1.0+)
 - `zod`: Schema validation for tool inputs/outputs
 - `dotenv`: Environment variable management
 - `tsx`: TypeScript execution (via npx)
+- `vite` + `vite-plugin-singlefile`: UI build pipeline (dev dependencies)
 
 ## Common Pitfalls
 

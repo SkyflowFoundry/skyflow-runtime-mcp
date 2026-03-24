@@ -169,42 +169,40 @@ function renderResult(data: DehydrateResult): void {
     <div class="container">
       ${data.anonymousMode ? `
         <div class="banner banner-warning">
-          ${escapeHtml(data.note || "Running in anonymous mode. Tokens are not persisted.")}
+          <strong>Anonymous mode</strong>
+          <div>Currently running in unauthenticated mode using ephemeral entity tokens. Configure Skyflow credentials for full functionality.</div>
         </div>
       ` : ""}
 
-      <div class="stats-bar">
-        <div class="stat">
-          <span class="stat-value">${entities.length}</span>
-          <span class="stat-label">Entities Found</span>
+      <div class="panel" style="margin-bottom: 16px;">
+        <div class="tab-bar">
+          <button class="tab active" data-tab="dehydrated">Dehydrated</button>
+          <button class="tab" data-tab="original">Original</button>
         </div>
-        <div class="stat">
-          <span class="stat-value">${entityTypes.size}</span>
-          <span class="stat-label">Entity Types</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">${data.wordCount ?? "-"}</span>
-          <span class="stat-label">Words</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value">${data.charCount ?? "-"}</span>
-          <span class="stat-label">Characters</span>
-        </div>
-      </div>
-
-      <div class="panels">
-        <div class="panel">
-          <div class="panel-header">Original</div>
-          <div class="panel-body">${inputHighlighted}</div>
-        </div>
-        <div class="panel">
-          <div class="panel-header">Dehydrated</div>
+        <div class="tab-content active" data-tab-content="dehydrated">
           <div class="panel-body">${outputHighlighted}</div>
+        </div>
+        <div class="tab-content" data-tab-content="original">
+          <div class="panel-body">${inputHighlighted}</div>
         </div>
       </div>
 
       ${sortedTypes.length > 0 ? `
         <div class="section-heading">Entity Breakdown</div>
+        <div class="stats-bar">
+          <div class="stat">
+            <span class="stat-value">${entities.length}</span>
+            <span class="stat-label">Entities</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">${entityTypes.size}</span>
+            <span class="stat-label">Types</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">${data.wordCount ?? "-"}</span>
+            <span class="stat-label">Words</span>
+          </div>
+        </div>
         <div class="entity-table-wrap">
           <table class="entity-table">
             <thead>
@@ -221,6 +219,17 @@ function renderResult(data: DehydrateResult): void {
       ` : ""}
     </div>
   `;
+
+  // Wire up tab switching
+  root.querySelectorAll<HTMLButtonElement>(".tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tabId = btn.dataset.tab!;
+      root.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+      root.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+      btn.classList.add("active");
+      root.querySelector(`.tab-content[data-tab-content="${tabId}"]`)?.classList.add("active");
+    });
+  });
 }
 
 function escapeHtml(text: string): string {

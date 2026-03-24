@@ -58,6 +58,30 @@ describe("Function with dependency", () => {
 });
 ```
 
+### Skyflow SDK Mocking Pattern
+
+The tool handler tests mock `skyflow-node` at the module level. Because the SDK classes are instantiated with `new`, mock implementations must use `function` syntax (not arrow functions):
+
+```typescript
+const mockSetDefault = vi.fn();
+
+vi.mock("skyflow-node", () => ({
+  // Use function syntax for classes instantiated with `new`
+  TokenFormat: vi.fn(function (this: any) { this.setDefault = mockSetDefault; }),
+  // Plain objects are fine as-is
+  TokenType: { VAULT_TOKEN: "VAULT_TOKEN" },
+}));
+
+// Factory for mock Skyflow instances with configurable responses
+function createMockSkyflow(response: Record<string, unknown>) {
+  return {
+    detect: vi.fn(() => ({
+      deidentifyText: vi.fn().mockResolvedValue(response),
+    })),
+  };
+}
+```
+
 ## Configuration
 
 - **vitest.config.ts** - Vitest test runner configuration
@@ -70,11 +94,10 @@ Coverage reports are generated in the `coverage/` directory (git-ignored).
 - `coverage/index.html` - Visual HTML report
 - `coverage/coverage-final.json` - JSON data
 
-## Next Steps
+## Test Coverage
 
-As you write tests, consider:
+The tool handler tests (`tests/unit/tools/`) cover:
 
-1. **Refactoring for testability** - Extract pure functions from server.ts
-2. **Mocking Skyflow SDK** - Use `vi.mock()` to mock external dependencies
-3. **Testing error paths** - Test both success and failure scenarios
-4. **Async testing** - Use `async/await` for testing async code
+- **dehydrate**: Output shape, entity metadata, token format by mode, anonymous mode flags
+- **rehydrate**: Output shape, inputText passthrough, anonymous mode error
+- **dehydrateFile**: File metadata passthrough, image/audio processing, entity/masking mapping, wait time defaults, optional fields, SkyflowError handling, generic error handling, anonymous mode error
