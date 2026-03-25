@@ -11,8 +11,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import express, { type Express } from "express";
 import { z } from "zod";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { dehydrateHtml, rehydrateHtml, dehydrateFileHtml } from "./generated/ui-html.js";
 import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
 import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
@@ -77,34 +76,22 @@ const server = new McpServer({
   version: "0.4.0",
 });
 
-// MCP Apps: Resource URIs and UI directory
-const DIST_UI_DIR = path.resolve(import.meta.dirname, "..", "dist", "ui");
+// MCP Apps: Resource URIs
 const DEHYDRATE_RESOURCE_URI = "ui://dehydrate/mcp-app.html";
 const REHYDRATE_RESOURCE_URI = "ui://rehydrate/mcp-app.html";
 const DEHYDRATE_FILE_RESOURCE_URI = "ui://dehydrate-file/mcp-app.html";
 
-// Helper to read a built UI HTML file, cached lazily on first request
-const uiHtmlCache = new Map<string, string>();
-async function readUiHtml(toolDir: string): Promise<string> {
-  let cached = uiHtmlCache.get(toolDir);
-  if (!cached) {
-    cached = await fs.readFile(path.join(DIST_UI_DIR, toolDir, "mcp-app.html"), "utf-8");
-    uiHtmlCache.set(toolDir, cached);
-  }
-  return cached;
-}
-
 // Register UI resources for each tool
 registerAppResource(server, "Dehydrate UI", DEHYDRATE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: DEHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: await readUiHtml("dehydrate") }],
+  contents: [{ uri: DEHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: dehydrateHtml }],
 }));
 
 registerAppResource(server, "Rehydrate UI", REHYDRATE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: REHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: await readUiHtml("rehydrate") }],
+  contents: [{ uri: REHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: rehydrateHtml }],
 }));
 
 registerAppResource(server, "Dehydrate File UI", DEHYDRATE_FILE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: DEHYDRATE_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: await readUiHtml("dehydrate-file") }],
+  contents: [{ uri: DEHYDRATE_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: dehydrateFileHtml }],
 }));
 
 /**
