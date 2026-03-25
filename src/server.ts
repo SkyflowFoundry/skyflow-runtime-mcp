@@ -19,6 +19,7 @@ import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaul
 import { handleDehydrate } from "./lib/tools/dehydrate.js";
 import { handleRehydrate } from "./lib/tools/rehydrate.js";
 import { handleDehydrateFile } from "./lib/tools/dehydrateFile.js";
+import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
   createAnonymousRateLimiter,
@@ -150,7 +151,7 @@ registerAppTool(
     const result = await handleDehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
-      structuredContent: result.output as unknown as Record<string, unknown>,
+      structuredContent: toStructuredContent(result.output),
       ...(result.isError && { isError: true }),
     };
   }
@@ -184,7 +185,7 @@ registerAppTool(
     const result = await handleRehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
-      structuredContent: result.output as unknown as Record<string, unknown>,
+      structuredContent: toStructuredContent(result.output),
       ...(result.isError && { isError: true }),
     };
   }
@@ -380,7 +381,7 @@ registerAppTool(
     const result = await handleDehydrateFile(args, getCurrentSkyflow(), getCurrentVaultId(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
-      structuredContent: result.output as unknown as Record<string, unknown>,
+      structuredContent: toStructuredContent(result.output),
       ...(result.isError && { isError: true }),
     };
   }

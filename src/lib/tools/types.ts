@@ -61,29 +61,17 @@ export interface DehydrateFileOutput {
   status?: string;
 }
 
-/** Error output from dehydrate tool */
-export interface DehydrateErrorOutput {
+/** Shared error output for all tools */
+export interface ToolErrorOutput {
   error: true | string;
   code?: number;
   message: string;
   details?: unknown;
 }
 
-/** Error output from rehydrate tool */
-export interface RehydrateErrorOutput {
-  error: true | string;
-  code?: number;
-  message: string;
-  details?: unknown;
-}
-
-/** Error output from file deidentification */
-export interface DehydrateFileErrorOutput {
-  error: true | string;
-  code?: number;
-  message: string;
-  details?: unknown;
-}
+export type DehydrateErrorOutput = ToolErrorOutput;
+export type RehydrateErrorOutput = ToolErrorOutput;
+export type DehydrateFileErrorOutput = ToolErrorOutput;
 
 /** Arguments for the dehydrate_file tool */
 export interface DehydrateFileArgs {
@@ -104,4 +92,12 @@ export interface DehydrateFileArgs {
 export interface ToolResult<T> {
   output: T;
   isError?: boolean;
+}
+
+/**
+ * Converts a typed tool output to the `structuredContent` format expected by the MCP SDK.
+ * Centralizes the cast from specific output types to `Record<string, unknown>`.
+ */
+export function toStructuredContent(output: object): Record<string, unknown> {
+  return output as Record<string, unknown>;
 }
