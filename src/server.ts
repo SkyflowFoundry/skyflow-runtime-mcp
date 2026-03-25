@@ -431,6 +431,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
         "Detected placeholder values in vaultId/vaultUrl query params, falling back to anonymous mode"
       );
       useAnonymousMode = true;
+      // SECURITY: req.skyflowCredentials contains secrets — never log or serialize the request object.
       req.skyflowCredentials = { apiKey: anonApiKey };
       req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
     } else {

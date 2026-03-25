@@ -11,10 +11,7 @@
       "Bash(git commit:*)",
       "Bash(pnpm build:server)",
       "Bash(pnpm build:*)",
-      "Bash(find /Users/joe/Code/sky-mcp-streamable/src -name *.test.ts -o -name *.spec.ts)",
-      "Bash(find /Users/joe/Code/sky-mcp-streamable -maxdepth 3 -name *.test.ts -o -name *.spec.ts)",
-      "Bash(find /Users/joe/Code/sky-mcp-streamable/node_modules/@modelcontextprotocol -name \"*.d.ts\" -exec grep -l \"CallToolResult\" {})",
-      "Bash(grep -n \"interface EntityInfo\\\\|interface DehydrateResult\\\\|interface RehydrateResult\\\\|interface DehydrateFileResult\" /Users/joe/Code/sky-mcp-streamable/ui/*/main.ts /Users/joe/Code/sky-mcp-streamable/src/lib/tools/types.ts)",
+      "Bash(find .:*)",
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)"
     ]

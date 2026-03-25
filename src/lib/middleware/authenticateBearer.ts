@@ -206,6 +206,7 @@ export function authenticateBearer(
 
     if (anonApiKey && anonVaultId && anonVaultUrl) {
       req.isAnonymousMode = true;
+      // SECURITY: req.skyflowCredentials contains secrets — never log or serialize the request object.
       req.skyflowCredentials = { apiKey: anonApiKey };
       req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
       return next();
@@ -216,6 +217,7 @@ export function authenticateBearer(
   }
 
   req.isAnonymousMode = false;
+  // SECURITY: req.skyflowCredentials contains secrets — never log or serialize the request object.
   req.skyflowCredentials = result.credentials;
   next();
 }
