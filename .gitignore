@@ -15,8 +15,9 @@ package-lock.json
 .env*.local
 .mcp.json
 
-# Build-time generated source
-src/generated/
+# Build-time generated source (keep .d.ts stub for type-checking)
+src/generated/*.ts
+!src/generated/*.d.ts
 
 # Test coverage
 coverage/
