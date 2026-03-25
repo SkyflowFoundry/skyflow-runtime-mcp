@@ -5,6 +5,7 @@
 	"type": "module",
 	"main": "dist/server.js",
 	"scripts": {
+		"predev": "pnpm build:ui && pnpm build:ui-imports",
 		"dev": "./dev.sh",
 		"build": "pnpm build:ui && pnpm build:ui-imports && pnpm build:server",
 		"build:ui-imports": "npx -y tsx scripts/generate-ui-imports.ts",
