@@ -2,10 +2,6 @@
   "permissions": {
     "allow": [
       "Read(.)",
-      "Read(//tmp/mcp-ext-apps/src/**)",
-      "Read(//private/tmp/mcp-ext-apps/src/**)",
-      "Read(//tmp/mcp-ext-apps/examples/pdf-server/**)",
-      "Read(//private/tmp/mcp-ext-apps/examples/pdf-server/**)",
       "Bash(pnpm add:*)",
       "Bash(pnpm build:ui)",
       "Bash(git commit:*)",

@@ -304,7 +304,7 @@ describe("Credentials Authentication", () => {
         const result = extractCredentials("Bearer sky-abc123-def456", undefined);
 
         expect(result.isPresent).toBe(true);
-        expect(result.credentials).toEqual({ apiKey: "sky-abc123-def456" });
+        expect(result.credentials).toEqual({ apiKey: "sky-abc123-def456" }); // gitleaks:allow
       });
 
       it("should use API key from header even when query param is also provided", () => {

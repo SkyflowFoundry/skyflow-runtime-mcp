@@ -7,7 +7,7 @@
 	"scripts": {
 		"dev": "./dev.sh",
 		"build": "pnpm build:ui && pnpm build:server",
-		"build:ui": "cd ui && (INPUT=dehydrate/mcp-app.html vite build & INPUT=rehydrate/mcp-app.html vite build & INPUT=dehydrate-file/mcp-app.html vite build & wait)",
+		"build:ui": "cd ui && INPUT=dehydrate/mcp-app.html vite build && INPUT=rehydrate/mcp-app.html vite build && INPUT=dehydrate-file/mcp-app.html vite build",
 		"build:server": "tsc",
 		"start": "node dist/server.js",
 		"server": "npx -y tsx src/server.ts",
