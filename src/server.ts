@@ -2,64 +2,28 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 import {
   McpServer,
-  ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  registerAppTool,
+  registerAppResource,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
 import express, { type Express } from "express";
 import { z } from "zod";
-import {
-  DeidentifyTextOptions,
-  DeidentifyTextRequest,
-  ReidentifyTextRequest,
-  DeidentifyFileOptions,
-  DeidentifyFileRequest,
-  FileInput,
-  TokenFormat,
-  TokenType,
-  Skyflow,
-  SkyflowError,
-} from "skyflow-node";
+import { dehydrateHtml, rehydrateHtml, dehydrateFileHtml } from "./generated/ui-html.js";
+import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
-import {
-  getEntityEnum,
-  getMaskingMethodEnum,
-  getTranscriptionEnum,
-} from "./lib/mappings/entityMaps.js";
 import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
+import { handleDehydrate } from "./lib/tools/dehydrate.js";
+import { handleRehydrate } from "./lib/tools/rehydrate.js";
+import { handleDehydrateFile } from "./lib/tools/dehydrateFile.js";
+import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
   createAnonymousRateLimiter,
   getAnonymousRateLimitConfig,
 } from "./lib/middleware/rateLimiter.js";
-
-/** Default maximum wait time for file dehydration operations (in seconds) */
-const DEFAULT_MAX_WAIT_TIME_SECONDS = 64;
-
-/** TypeScript interface for detected entity response items */
-interface DetectedEntityItem {
-  file: string;
-  extension: string;
-}
-
-/** TypeScript interface for dehydrate file output */
-interface DeidentifyFileOutput {
-  [x: string]: unknown;
-  processedFileData?: string;
-  mimeType?: string;
-  extension?: string;
-  detectedEntities?: Array<{
-    file: string;
-    extension: string;
-  }>;
-  wordCount?: number;
-  charCount?: number;
-  sizeInKb?: number;
-  durationInSeconds?: number;
-  pageCount?: number;
-  slideCount?: number;
-  runId?: string;
-  status?: string;
-}
 
 /**
  * AsyncLocalStorage for storing per-request Skyflow instances
@@ -108,25 +72,53 @@ function isAnonymousMode(): boolean {
 
 // Create an MCP server
 const server = new McpServer({
-  name: "demo-server",
-  version: "1.0.0",
+  name: "Skyflow Runtime MCP Server",
+  version: "0.4.0",
 });
+
+// MCP Apps: Resource URIs
+const DEHYDRATE_RESOURCE_URI = "ui://dehydrate/mcp-app.html";
+const REHYDRATE_RESOURCE_URI = "ui://rehydrate/mcp-app.html";
+const DEHYDRATE_FILE_RESOURCE_URI = "ui://dehydrate-file/mcp-app.html";
+
+// Register UI resources for each tool
+registerAppResource(server, "Dehydrate UI", DEHYDRATE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DEHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: dehydrateHtml }],
+}));
+
+registerAppResource(server, "Rehydrate UI", REHYDRATE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: REHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: rehydrateHtml }],
+}));
+
+registerAppResource(server, "Dehydrate File UI", DEHYDRATE_FILE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DEHYDRATE_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: dehydrateFileHtml }],
+}));
 
 /**
  * Skyflow Dehydrate Tool
  * Replaces sensitive information in text with placeholder tokens
  */
-server.registerTool(
+registerAppTool(
+  server,
   "dehydrate",
   {
     title: "Skyflow Dehydrate Tool",
     description:
       "Dehydrate sensitive information in strings using Skyflow. This tool accepts a string and returns another string, but with placeholders for sensitive data. The placeholders tell you what they are replacing. For example, a credit card number might be replaced with [CREDIT_CARD_abc123].",
-    inputSchema: { inputString: z.string().min(1) },
+    inputSchema: { inputString: z.string().min(1).describe("Original Text — paste the text you want to scan for sensitive data") },
     outputSchema: {
+      inputText: z.string().describe("The original input text"),
       processedText: z.string(),
       wordCount: z.number(),
       charCount: z.number(),
+      entities: z.array(z.object({
+        token: z.string().optional(),
+        value: z.string().optional(),
+        entity: z.string().optional(),
+        textIndex: z.object({ start: z.number().optional(), end: z.number().optional() }).optional(),
+        processedIndex: z.object({ start: z.number().optional(), end: z.number().optional() }).optional(),
+        scores: z.record(z.number()).optional(),
+      })).describe("Detected entities with positions and confidence scores"),
       anonymousMode: z
         .boolean()
         .optional()
@@ -135,51 +127,19 @@ server.registerTool(
         .string()
         .optional()
         .describe("Additional information about the response, such as anonymous mode limitations"),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      message: z.string().optional().describe("Detailed error message"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
+    _meta: { ui: { resourceUri: DEHYDRATE_RESOURCE_URI } },
   },
   async ({ inputString }) => {
-    const anonymousMode = isAnonymousMode();
-
-    const tokenFormat = new TokenFormat();
-    if (anonymousMode) {
-      // Anonymous mode: use ENTITY_UNIQUE_COUNTER (no vault storage)
-      tokenFormat.setDefault(TokenType.ENTITY_UNIQUE_COUNTER);
-    } else {
-      // Authenticated mode: use VAULT_TOKEN (persistent storage)
-      tokenFormat.setDefault(TokenType.VAULT_TOKEN);
-    }
-
-    const options = new DeidentifyTextOptions();
-    options.setTokenFormat(tokenFormat);
-    // TODO: add support for custom restrict regex list, include in the tool input schema
-    // options.setRestrictRegexList([
-    //   "/.{3,}@[a-zA-Z]{2,}\.[a-zA-Z]{2,}/g", // Email addresses with at least 3 characters before '@'
-    // ]);
-    // TODO: add support for custom allow regex list, include in the tool input schema. Note that allow wins over restrict if the same pattern is in both lists.
-    // options.setAllowRegexList([
-    //   "/.{3,}@[a-zA-Z]{2,}\.[a-zA-Z]{2,}/g", // Email addresses with at least 3 characters before '@'
-    // ]);
-
-    // Get the per-request Skyflow instance
-    const skyflow = getCurrentSkyflow();
-
-    const response = await skyflow
-      .detect()
-      .deidentifyText(new DeidentifyTextRequest(inputString), options);
-
-    const output = {
-      processedText: response.processedText,
-      wordCount: response.wordCount,
-      charCount: response.charCount,
-      ...(anonymousMode && {
-        anonymousMode: true,
-        note: "Running in anonymous mode. Tokens are not persisted. Configure credentials for full functionality.",
-      }),
-    };
-
+    const result = await handleDehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
-      content: [{ type: "text", text: JSON.stringify(output) }],
-      structuredContent: output,
+      content: [{ type: "text", text: JSON.stringify(result.output) }],
+      structuredContent: toStructuredContent(result.output),
+      ...(result.isError && { isError: true }),
     };
   }
 );
@@ -188,52 +148,32 @@ server.registerTool(
  * Skyflow Rehydrate Tool
  * Restores original sensitive data from dehydrated placeholders
  */
-server.registerTool(
+registerAppTool(
+  server,
   "rehydrate",
   {
     title: "Skyflow Rehydrate Tool",
     description:
       "Rehydrate previously dehydrated sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data.",
-    inputSchema: { inputString: z.string().min(1) },
+    inputSchema: { inputString: z.string().min(1).describe("Original Text — paste the tokenized text you want to restore") },
     outputSchema: {
-      processedText: z.string(),
+      inputText: z.string().optional().describe("The original tokenized input text"),
+      processedText: z.string().optional(),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+      anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
+      message: z.string().optional().describe("Detailed error or setup instructions"),
+      helpUrl: z.string().optional().describe("URL for setup documentation"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
+    _meta: { ui: { resourceUri: REHYDRATE_RESOURCE_URI } },
   },
   async ({ inputString }) => {
-    // Check if in anonymous mode
-    if (isAnonymousMode()) {
-      const errorOutput = {
-        error: "rehydrate is not available in anonymous mode",
-        anonymousModeRestricted: true,
-        message:
-          "The rehydrate tool requires authenticated access to restore sensitive data from vault tokens. " +
-          "To use this feature, configure your Skyflow credentials:\n\n" +
-          "1. Get your API key from the Skyflow dashboard\n" +
-          "2. Add via Authorization header: 'Bearer <api-key>'\n" +
-          "   Or via query parameter: '?apiKey=<api-key>'",
-        helpUrl: "https://docs.skyflow.com/",
-      };
-      return {
-        content: [{ type: "text", text: JSON.stringify(errorOutput) }],
-        structuredContent: errorOutput,
-        isError: true,
-      };
-    }
-
-    // Get the per-request Skyflow instance
-    const skyflow = getCurrentSkyflow();
-
-    const response = await skyflow
-      .detect()
-      .reidentifyText(new ReidentifyTextRequest(inputString));
-
-    const output = {
-      processedText: response.processedText,
-    };
-
+    const result = await handleRehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
-      content: [{ type: "text", text: JSON.stringify(output) }],
-      structuredContent: output,
+      content: [{ type: "text", text: JSON.stringify(result.output) }],
+      structuredContent: toStructuredContent(result.output),
+      ...(result.isError && { isError: true }),
     };
   }
 );
@@ -243,12 +183,14 @@ server.registerTool(
  * Processes files to detect and redact sensitive information
  * Maximum file size: 5MB (due to base64 encoding overhead, original binary files should be ~3.75MB or less)
  */
-server.registerTool(
+registerAppTool(
+  server,
   "dehydrate_file",
   {
     title: "Skyflow Dehydrate File Tool",
     description:
       "Dehydrate sensitive information in files (images, PDFs, audio, documents) using Skyflow. Accepts base64-encoded file data and returns the processed file with sensitive data redacted or masked. Maximum file size: 5MB (base64-encoded). Due to base64 encoding overhead, original binary files should be approximately 3.75MB or smaller.",
+    _meta: { ui: { resourceUri: DEHYDRATE_FILE_RESOURCE_URI } },
     inputSchema: {
       fileData: z.string().min(1).describe("Base64-encoded file content"),
       fileName: z.string().describe("Original filename for type detection"),
@@ -341,7 +283,7 @@ server.registerTool(
       outputProcessedFile: z
         .boolean()
         .optional()
-        .describe("Whether to include the processed file in the response"),
+        .describe("Whether to include the processed file in the response. Only supported for image/* and audio/* files; not yet supported for PDFs or documents."),
       outputOcrText: z
         .boolean()
         .optional()
@@ -368,6 +310,8 @@ server.registerTool(
         .describe("Wait time for response in seconds (max 64)"),
     },
     outputSchema: {
+      inputFileName: z.string().optional().describe("Original filename"),
+      inputMimeType: z.string().optional().describe("Original MIME type"),
       processedFileData: z
         .string()
         .optional()
@@ -411,190 +355,23 @@ server.registerTool(
         .describe("Number of slides for presentations"),
       runId: z.string().optional().describe("Run ID for async operations"),
       status: z.string().optional().describe("Status of the operation"),
+      warnings: z.array(z.string()).optional().describe("Warnings about unsupported options for the given file type"),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+      anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
+      message: z.string().optional().describe("Detailed error or setup instructions"),
+      helpUrl: z.string().optional().describe("URL for setup documentation"),
+      alternativeTool: z.string().optional().describe("Suggested alternative tool to use"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
   },
-  async ({
-    fileData,
-    fileName,
-    mimeType,
-    entities,
-    maskingMethod,
-    outputProcessedFile,
-    outputOcrText,
-    outputTranscription,
-    pixelDensity,
-    maxResolution,
-    waitTime,
-  }) => {
-    // Check if in anonymous mode
-    if (isAnonymousMode()) {
-      const errorOutput = {
-        error: "dehydrate_file is not available in anonymous mode",
-        anonymousModeRestricted: true,
-        message:
-          "File deidentification requires authenticated access for secure processing. " +
-          "To use this feature, configure your Skyflow credentials:\n\n" +
-          "1. Get your API key from the Skyflow dashboard\n" +
-          "2. Add via Authorization header: 'Bearer <api-key>'\n" +
-          "   Or via query parameter: '?apiKey=<api-key>'\n\n" +
-          "For text-only deidentification, you can use the 'dehydrate' tool in anonymous mode.",
-        helpUrl: "https://docs.skyflow.com/",
-        alternativeTool: "dehydrate",
-      };
-      return {
-        content: [{ type: "text", text: JSON.stringify(errorOutput) }],
-        structuredContent: errorOutput,
-        isError: true,
-      };
-    }
-
-    try {
-      // Decode base64 to buffer
-      const buffer = Buffer.from(fileData, "base64");
-
-      // Create a File object from the buffer
-      const file = new File([buffer], fileName, { type: mimeType });
-
-      // Construct the file input
-      const fileInput: FileInput = { file: file };
-      const fileReq = new DeidentifyFileRequest(fileInput);
-
-      // Configure DeidentifyFileOptions
-      const options = new DeidentifyFileOptions();
-
-      // Set entities if provided - use type-safe mapping
-      if (entities && entities.length > 0) {
-        const entityEnums = entities.map((e) => getEntityEnum(e));
-        options.setEntities(entityEnums);
-      }
-
-      // Set masking method for images - use type-safe mapping
-      if (maskingMethod) {
-        options.setMaskingMethod(getMaskingMethodEnum(maskingMethod));
-      }
-
-      // Set output options
-      if (outputProcessedFile !== undefined) {
-        if (mimeType?.startsWith("image/")) {
-          options.setOutputProcessedImage(outputProcessedFile);
-        } else if (mimeType?.startsWith("audio/")) {
-          options.setOutputProcessedAudio(outputProcessedFile);
-        }
-      }
-
-      if (outputOcrText) {
-        options.setOutputOcrText(outputOcrText);
-      }
-
-      if (outputTranscription) {
-        options.setOutputTranscription(getTranscriptionEnum(outputTranscription));
-      }
-
-      if (pixelDensity) {
-        options.setPixelDensity(pixelDensity);
-      }
-
-      if (maxResolution) {
-        options.setMaxResolution(maxResolution);
-      }
-
-      // Set wait time (default to max, or use provided value)
-      options.setWaitTime(waitTime || DEFAULT_MAX_WAIT_TIME_SECONDS);
-
-      // Get the per-request Skyflow instance and vaultId
-      const skyflow = getCurrentSkyflow();
-      const vaultId = getCurrentVaultId();
-
-      const response = await skyflow
-        .detect(vaultId)
-        .deidentifyFile(fileReq, options);
-
-      // Prepare the output with proper typing
-      const output: DeidentifyFileOutput = {};
-
-      // If there's a processed file base64, include it
-      if (response.fileBase64) {
-        output.processedFileData = response.fileBase64;
-      }
-
-      // Include file metadata
-      if (response.type) {
-        output.mimeType = response.type;
-      }
-
-      if (response.extension) {
-        output.extension = response.extension;
-      }
-
-      // Add detected entities if available with proper typing
-      if (response.entities && response.entities.length > 0) {
-        output.detectedEntities = response.entities.map(
-          (e: DetectedEntityItem) => ({
-            file: e.file,
-            extension: e.extension,
-          })
-        );
-      }
-
-      // Add file statistics
-      if (response.wordCount !== undefined) {
-        output.wordCount = response.wordCount;
-      }
-
-      if (response.charCount !== undefined) {
-        output.charCount = response.charCount;
-      }
-
-      if (response.sizeInKb !== undefined) {
-        output.sizeInKb = response.sizeInKb;
-      }
-
-      if (response.durationInSeconds !== undefined) {
-        output.durationInSeconds = response.durationInSeconds;
-      }
-
-      if (response.pageCount !== undefined) {
-        output.pageCount = response.pageCount;
-      }
-
-      if (response.slideCount !== undefined) {
-        output.slideCount = response.slideCount;
-      }
-
-      // Include run ID and status if this was an async operation
-      if (response.runId) {
-        output.runId = response.runId;
-        output.status = response.status;
-      }
-
-      return {
-        content: [{ type: "text", text: JSON.stringify(output) }],
-        structuredContent: output,
-      };
-    } catch (error) {
-      if (error instanceof SkyflowError) {
-        const errorOutput = {
-          error: true,
-          code: error.error?.http_code,
-          message: error.message,
-          details: error.error?.details,
-        };
-        return {
-          content: [{ type: "text", text: JSON.stringify(errorOutput) }],
-          isError: true,
-        };
-      } else {
-        const errorOutput = {
-          error: true,
-          message:
-            error instanceof Error ? error.message : "Unknown error occurred",
-        };
-        return {
-          content: [{ type: "text", text: JSON.stringify(errorOutput) }],
-          isError: true,
-        };
-      }
-    }
+  async (args) => {
+    const result = await handleDehydrateFile(args, getCurrentSkyflow(), getCurrentVaultId(), isAnonymousMode());
+    return {
+      content: [{ type: "text", text: JSON.stringify(result.output) }],
+      structuredContent: toStructuredContent(result.output),
+      ...(result.isError && { isError: true }),
+    };
   }
 );
 
@@ -643,6 +420,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
         "Detected placeholder values in vaultId/vaultUrl query params, falling back to anonymous mode"
       );
       useAnonymousMode = true;
+      // SECURITY: req.skyflowCredentials contains secrets — never log or serialize the request object.
       req.skyflowCredentials = { apiKey: anonApiKey };
       req.anonVaultConfig = { vaultId: anonVaultId, vaultUrl: anonVaultUrl };
     } else {

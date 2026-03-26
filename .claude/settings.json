@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(.)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm build:ui)",
+      "Bash(git commit:*)",
+      "Bash(pnpm build:server)",
+      "Bash(pnpm build:*)",
+      "Bash(find .:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)"
+    ]
+  }
+}

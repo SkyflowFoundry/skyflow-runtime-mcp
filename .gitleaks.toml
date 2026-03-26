@@ -1,0 +1,17 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow sample/test tokens used in documentation and tests"
+
+# Suppress any finding whose detected secret contains these known fake/sample values.
+# This works across all commits in git history regardless of line numbers or commit hashes.
+# Only the specific finding is suppressed — the rest of the scan runs normally.
+stopwords = [
+  "sky-abc123-def456",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+]
+
+paths = [
+  '''tests/''',
+]
