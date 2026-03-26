@@ -59,6 +59,7 @@ export interface DehydrateFileOutput {
   slideCount?: number;
   runId?: string;
   status?: string;
+  warnings?: string[];
 }
 
 /** Shared error output for all tools */

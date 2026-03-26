@@ -90,11 +90,16 @@ export async function handleDehydrateFile(
     }
 
     // Set output options
+    const warnings: string[] = [];
     if (outputProcessedFile !== undefined) {
       if (mimeType?.startsWith("image/")) {
         options.setOutputProcessedImage(outputProcessedFile);
       } else if (mimeType?.startsWith("audio/")) {
         options.setOutputProcessedAudio(outputProcessedFile);
+      } else {
+        warnings.push(
+          `outputProcessedFile is not yet supported for ${mimeType ?? "unknown"} files. It currently only applies to image/* and audio/* types.`
+        );
       }
     }
 
@@ -175,6 +180,10 @@ export async function handleDehydrateFile(
     if (response.runId) {
       output.runId = response.runId;
       output.status = response.status;
+    }
+
+    if (warnings.length > 0) {
+      output.warnings = warnings;
     }
 
     return { output };

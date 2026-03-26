@@ -283,7 +283,7 @@ registerAppTool(
       outputProcessedFile: z
         .boolean()
         .optional()
-        .describe("Whether to include the processed file in the response"),
+        .describe("Whether to include the processed file in the response. Only supported for image/* and audio/* files; not yet supported for PDFs or documents."),
       outputOcrText: z
         .boolean()
         .optional()
@@ -355,6 +355,7 @@ registerAppTool(
         .describe("Number of slides for presentations"),
       runId: z.string().optional().describe("Run ID for async operations"),
       status: z.string().optional().describe("Status of the operation"),
+      warnings: z.array(z.string()).optional().describe("Warnings about unsupported options for the given file type"),
       error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
       anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
       message: z.string().optional().describe("Detailed error or setup instructions"),
