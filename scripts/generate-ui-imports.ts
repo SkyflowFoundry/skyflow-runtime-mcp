@@ -13,9 +13,9 @@ const DIST_UI = join(ROOT, "dist", "ui");
 const OUT_FILE = join(ROOT, "src", "generated", "ui-html.ts");
 
 const tools = [
-  { varName: "dehydrateHtml", dir: "dehydrate" },
-  { varName: "rehydrateHtml", dir: "rehydrate" },
-  { varName: "dehydrateFileHtml", dir: "dehydrate-file" },
+  { varName: "deIdentifyHtml", dir: "de-identify" },
+  { varName: "reIdentifyHtml", dir: "re-identify" },
+  { varName: "deIdentifyFileHtml", dir: "de-identify-file" },
 ] as const;
 
 function escapeForTemplateLiteral(s: string): string {

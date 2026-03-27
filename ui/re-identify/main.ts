@@ -1,7 +1,7 @@
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { setupHostTheming, applyInitialContext } from "../shared/theme.js";
-import type { RehydrateResult } from "../shared/types.js";
+import type { ReIdentifyResult } from "../shared/types.js";
 import "../shared/styles.css";
 
 const root = document.getElementById("root")!;
@@ -160,7 +160,7 @@ function highlightValuesInOutput(text: string, mappings: TokenMapping[]): string
   return html;
 }
 
-function renderResult(data: RehydrateResult): void {
+function renderResult(data: ReIdentifyResult): void {
   if (data.error || data.anonymousModeRestricted) {
     const isAnonymous = data.anonymousModeRestricted;
     root.innerHTML = `
@@ -242,7 +242,7 @@ function renderResult(data: RehydrateResult): void {
 }
 
 // Set up MCP App
-const app = new App({ name: "Skyflow Rehydrate", version: "1.0.0" });
+const app = new App({ name: "Skyflow Re-identify", version: "1.0.0" });
 
 setupHostTheming(app);
 
@@ -252,7 +252,7 @@ app.ontoolinput = (params) => {
 };
 
 app.ontoolresult = (result: CallToolResult) => {
-  const data = (result as { structuredContent?: RehydrateResult }).structuredContent;
+  const data = (result as { structuredContent?: ReIdentifyResult }).structuredContent;
   if (data) {
     renderResult(data);
   }

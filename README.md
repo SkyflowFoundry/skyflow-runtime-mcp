@@ -55,9 +55,9 @@ To use this MCP server with Claude Desktop, add the following configuration to y
 ### Features
 
 - **Tools**:
-  - `dehydrate`: Skyflow dehydration tool for detecting and redacting sensitive information (PII, PHI, etc.) in text
-  - `rehydrate`: Reverses dehydration by restoring original sensitive data from tokens
-  - `dehydrate_file`: Processes files (images, PDFs, audio, documents) to detect and redact sensitive information
+  - `de-identify`: Skyflow de-identification tool for detecting and redacting sensitive information (PII, PHI, etc.) in text
+  - `re-identify`: Reverses de-identification by restoring original sensitive data from tokens
+  - `de-identify_file`: Processes files (images, PDFs, audio, documents) to detect and redact sensitive information
 - **Authentication**: Supports both JWT bearer tokens and API keys via `Authorization` header (auto-detected)
 - **Multi-tenant**: Each request can specify different vault configurations via query parameters
 - **Transport**: Streamable HTTP with JSON response support
@@ -75,7 +75,7 @@ After updating the config:
 
 1. Save the file
 2. Restart Claude Desktop completely (quit and reopen)
-3. The `add` and `dehydrate` tools should now be available in Claude Desktop
+3. The `add` and `de-identify` tools should now be available in Claude Desktop
 
 ## Architecture
 
@@ -157,7 +157,7 @@ Create a `.env.local` file with optional fallback values:
 
 ## Anonymous Mode (Try Before You Buy)
 
-You can try the dehydrate tool without configuring Skyflow credentials. When no credentials are provided and anonymous mode is enabled on the server, limited functionality is available.
+You can try the de-identify tool without configuring Skyflow credentials. When no credentials are provided and anonymous mode is enabled on the server, limited functionality is available.
 
 ### Quick Start (Anonymous)
 
@@ -166,14 +166,14 @@ You can try the dehydrate tool without configuring Skyflow credentials. When no 
 curl -X POST "https://pii-mcp.dev/mcp" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john@example.com and my SSN is 123-45-6789"}},"id":1}'
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"de-identify","arguments":{"inputString":"My email is john@example.com and my SSN is 123-45-6789"}},"id":1}'
 ```
 
 ### Limitations in Anonymous Mode
 
-- **Only `dehydrate` tool available** - `rehydrate` and `dehydrate_file` return helpful errors
+- **Only `de-identify` tool available** - `re-identify` and `de-identify_file` return helpful errors
 - **Tokens use entity counters** - e.g., `[EMAIL_ADDRESS_1]`, `[SSN_2]` instead of vault tokens
-- **Data is NOT persisted** - tokens cannot be rehydrated later
+- **Data is NOT persisted** - tokens cannot be re-identified later
 - **Rate limited** - 10 requests per minute per IP (configurable by server operator)
 
 ### Claude Desktop (Anonymous)
@@ -191,7 +191,7 @@ To use anonymous mode with Claude Desktop:
 }
 ```
 
-To unlock full functionality (rehydrate, file processing, persistent vault tokens), configure your Skyflow credentials as shown in the sections above.
+To unlock full functionality (re-identify, file processing, persistent vault tokens), configure your Skyflow credentials as shown in the sections above.
 
 ### Server Configuration for Anonymous Mode
 
@@ -223,30 +223,30 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
-### Call the Dehydrate Tool
+### Call the De-identify Tool
 
-Test calling the `dehydrate` tool to redact sensitive information:
+Test calling the `de-identify` tool to redact sensitive information:
 
 ```bash
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer {your_bearer_token}" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john.doe@example.com and my SSN is 123-45-6789"}},"id":2}'
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"de-identify","arguments":{"inputString":"My email is john.doe@example.com and my SSN is 123-45-6789"}},"id":2}'
 ```
 
-This will return the dehydrated text with sensitive data redacted, along with word and character counts.
+This will return the de-identified text with sensitive data redacted, along with word and character counts.
 
-### Call the Rehydrate Tool
+### Call the Re-identify Tool
 
-Test calling the `rehydrate` tool to restore original sensitive data:
+Test calling the `re-identify` tool to restore original sensitive data:
 
 ```bash
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer {your_bearer_token}" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"rehydrate","arguments":{"inputString":"[REDACTED_TEXT_WITH_TOKENS]"}},"id":3}'
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"re-identify","arguments":{"inputString":"[REDACTED_TEXT_WITH_TOKENS]"}},"id":3}'
 ```
 
 ## Integration with Claude Desktop
@@ -305,7 +305,7 @@ After updating the config:
 
 1. Save the file
 2. Restart Claude Desktop completely (quit and reopen)
-3. The `dehydrate`, `rehydrate`, and `dehydrate_file` tools should now be available in Claude Desktop
+3. The `de-identify`, `re-identify`, and `de-identify_file` tools should now be available in Claude Desktop
 
 ## Architecture
 

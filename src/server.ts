@@ -11,13 +11,13 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import express, { type Express } from "express";
 import { z } from "zod";
-import { dehydrateHtml, rehydrateHtml, dehydrateFileHtml } from "./generated/ui-html.js";
+import { deIdentifyHtml, reIdentifyHtml, deIdentifyFileHtml } from "./generated/ui-html.js";
 import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
 import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
-import { handleDehydrate } from "./lib/tools/dehydrate.js";
-import { handleRehydrate } from "./lib/tools/rehydrate.js";
-import { handleDehydrateFile } from "./lib/tools/dehydrateFile.js";
+import { handleDeIdentify } from "./lib/tools/deIdentify.js";
+import { handleReIdentify } from "./lib/tools/reIdentify.js";
+import { handleDeIdentifyFile } from "./lib/tools/deIdentifyFile.js";
 import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
@@ -77,34 +77,34 @@ const server = new McpServer({
 });
 
 // MCP Apps: Resource URIs
-const DEHYDRATE_RESOURCE_URI = "ui://dehydrate/mcp-app.html";
-const REHYDRATE_RESOURCE_URI = "ui://rehydrate/mcp-app.html";
-const DEHYDRATE_FILE_RESOURCE_URI = "ui://dehydrate-file/mcp-app.html";
+const DE_IDENTIFY_RESOURCE_URI = "ui://de-identify/mcp-app.html";
+const RE_IDENTIFY_RESOURCE_URI = "ui://re-identify/mcp-app.html";
+const DE_IDENTIFY_FILE_RESOURCE_URI = "ui://de-identify-file/mcp-app.html";
 
 // Register UI resources for each tool
-registerAppResource(server, "Dehydrate UI", DEHYDRATE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: DEHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: dehydrateHtml }],
+registerAppResource(server, "De-identify UI", DE_IDENTIFY_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DE_IDENTIFY_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: deIdentifyHtml }],
 }));
 
-registerAppResource(server, "Rehydrate UI", REHYDRATE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: REHYDRATE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: rehydrateHtml }],
+registerAppResource(server, "Re-identify UI", RE_IDENTIFY_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: RE_IDENTIFY_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: reIdentifyHtml }],
 }));
 
-registerAppResource(server, "Dehydrate File UI", DEHYDRATE_FILE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: DEHYDRATE_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: dehydrateFileHtml }],
+registerAppResource(server, "De-identify File UI", DE_IDENTIFY_FILE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DE_IDENTIFY_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: deIdentifyFileHtml }],
 }));
 
 /**
- * Skyflow Dehydrate Tool
+ * Skyflow De-identify Tool
  * Replaces sensitive information in text with placeholder tokens
  */
 registerAppTool(
   server,
-  "dehydrate",
+  "de-identify",
   {
-    title: "Skyflow Dehydrate Tool",
+    title: "Skyflow De-identify Tool",
     description:
-      "Dehydrate sensitive information in strings using Skyflow. This tool accepts a string and returns another string, but with placeholders for sensitive data. The placeholders tell you what they are replacing. For example, a credit card number might be replaced with [CREDIT_CARD_abc123].",
+      "De-identify sensitive information in strings using Skyflow. This tool accepts a string and returns another string, but with placeholders for sensitive data. The placeholders tell you what they are replacing. For example, a credit card number might be replaced with [CREDIT_CARD_abc123].",
     inputSchema: { inputString: z.string().min(1).describe("Original Text — paste the text you want to scan for sensitive data") },
     outputSchema: {
       inputText: z.string().describe("The original input text"),
@@ -132,10 +132,10 @@ registerAppTool(
       message: z.string().optional().describe("Detailed error message"),
       details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
-    _meta: { ui: { resourceUri: DEHYDRATE_RESOURCE_URI } },
+    _meta: { ui: { resourceUri: DE_IDENTIFY_RESOURCE_URI } },
   },
   async ({ inputString }) => {
-    const result = await handleDehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
+    const result = await handleDeIdentify(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
       structuredContent: toStructuredContent(result.output),
@@ -145,16 +145,16 @@ registerAppTool(
 );
 
 /**
- * Skyflow Rehydrate Tool
- * Restores original sensitive data from dehydrated placeholders
+ * Skyflow Re-identify Tool
+ * Restores original sensitive data from de-identified placeholders
  */
 registerAppTool(
   server,
-  "rehydrate",
+  "re-identify",
   {
-    title: "Skyflow Rehydrate Tool",
+    title: "Skyflow Re-identify Tool",
     description:
-      "Rehydrate previously dehydrated sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data.",
+      "Re-identify previously de-identified sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data.",
     inputSchema: { inputString: z.string().min(1).describe("Original Text — paste the tokenized text you want to restore") },
     outputSchema: {
       inputText: z.string().optional().describe("The original tokenized input text"),
@@ -166,10 +166,10 @@ registerAppTool(
       code: z.number().optional().describe("HTTP error code from Skyflow API"),
       details: z.unknown().optional().describe("Additional error details from Skyflow API"),
     },
-    _meta: { ui: { resourceUri: REHYDRATE_RESOURCE_URI } },
+    _meta: { ui: { resourceUri: RE_IDENTIFY_RESOURCE_URI } },
   },
   async ({ inputString }) => {
-    const result = await handleRehydrate(inputString, getCurrentSkyflow(), isAnonymousMode());
+    const result = await handleReIdentify(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
       structuredContent: toStructuredContent(result.output),
@@ -179,18 +179,18 @@ registerAppTool(
 );
 
 /**
- * Skyflow Dehydrate File Tool
+ * Skyflow De-identify File Tool
  * Processes files to detect and redact sensitive information
  * Maximum file size: 5MB (due to base64 encoding overhead, original binary files should be ~3.75MB or less)
  */
 registerAppTool(
   server,
-  "dehydrate_file",
+  "de-identify_file",
   {
-    title: "Skyflow Dehydrate File Tool",
+    title: "Skyflow De-identify File Tool",
     description:
-      "Dehydrate sensitive information in files (images, PDFs, audio, documents) using Skyflow. Accepts base64-encoded file data and returns the processed file with sensitive data redacted or masked. Maximum file size: 5MB (base64-encoded). Due to base64 encoding overhead, original binary files should be approximately 3.75MB or smaller.",
-    _meta: { ui: { resourceUri: DEHYDRATE_FILE_RESOURCE_URI } },
+      "De-identify sensitive information in files (images, PDFs, audio, documents) using Skyflow. Accepts base64-encoded file data and returns the processed file with sensitive data redacted or masked. Maximum file size: 5MB (base64-encoded). Due to base64 encoding overhead, original binary files should be approximately 3.75MB or smaller.",
+    _meta: { ui: { resourceUri: DE_IDENTIFY_FILE_RESOURCE_URI } },
     inputSchema: {
       fileData: z.string().min(1).describe("Base64-encoded file content"),
       fileName: z.string().describe("Original filename for type detection"),
@@ -366,7 +366,7 @@ registerAppTool(
     },
   },
   async (args) => {
-    const result = await handleDehydrateFile(args, getCurrentSkyflow(), getCurrentVaultId(), isAnonymousMode());
+    const result = await handleDeIdentifyFile(args, getCurrentSkyflow(), getCurrentVaultId(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
       structuredContent: toStructuredContent(result.output),

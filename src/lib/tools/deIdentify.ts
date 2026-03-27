@@ -6,17 +6,17 @@ import {
   TokenType,
 } from "skyflow-node";
 import type { Skyflow } from "skyflow-node";
-import type { DehydrateOutput, DehydrateErrorOutput, ToolResult } from "./types.js";
+import type { DeIdentifyOutput, DeIdentifyErrorOutput, ToolResult } from "./types.js";
 
 /**
- * Handle the dehydrate tool logic.
+ * Handle the de-identify tool logic.
  * Detects and replaces sensitive information in text with tokens.
  */
-export async function handleDehydrate(
+export async function handleDeIdentify(
   inputString: string,
   skyflow: Skyflow,
   anonymousMode: boolean
-): Promise<ToolResult<DehydrateOutput | DehydrateErrorOutput>> {
+): Promise<ToolResult<DeIdentifyOutput | DeIdentifyErrorOutput>> {
   try {
     const tokenFormat = new TokenFormat();
     if (anonymousMode) {

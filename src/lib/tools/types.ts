@@ -8,8 +8,8 @@ export interface EntityInfo {
   scores?: Record<string, number>;
 }
 
-/** Output from the dehydrate tool handler */
-export interface DehydrateOutput {
+/** Output from the de-identify tool handler */
+export interface DeIdentifyOutput {
   inputText: string;
   processedText: string;
   wordCount: number;
@@ -19,8 +19,8 @@ export interface DehydrateOutput {
   note?: string;
 }
 
-/** Output from the rehydrate tool handler */
-export interface RehydrateOutput {
+/** Output from the re-identify tool handler */
+export interface ReIdentifyOutput {
   inputText: string;
   processedText: string;
 }
@@ -40,8 +40,8 @@ export interface DetectedEntityItem {
   extension: string;
 }
 
-/** Output from the dehydrate_file tool handler */
-export interface DehydrateFileOutput {
+/** Output from the de-identify_file tool handler */
+export interface DeIdentifyFileOutput {
   inputFileName?: string;
   inputMimeType?: string;
   processedFileData?: string;
@@ -70,12 +70,12 @@ export interface ToolErrorOutput {
   details?: unknown;
 }
 
-export type DehydrateErrorOutput = ToolErrorOutput;
-export type RehydrateErrorOutput = ToolErrorOutput;
-export type DehydrateFileErrorOutput = ToolErrorOutput;
+export type DeIdentifyErrorOutput = ToolErrorOutput;
+export type ReIdentifyErrorOutput = ToolErrorOutput;
+export type DeIdentifyFileErrorOutput = ToolErrorOutput;
 
-/** Arguments for the dehydrate_file tool */
-export interface DehydrateFileArgs {
+/** Arguments for the de-identify_file tool */
+export interface DeIdentifyFileArgs {
   fileData: string;
   fileName: string;
   mimeType?: string;
