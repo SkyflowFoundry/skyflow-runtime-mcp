@@ -1,7 +1,7 @@
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { setupHostTheming, applyInitialContext } from "../shared/theme.js";
-import type { EntityInfo, DehydrateResult } from "../shared/types.js";
+import type { EntityInfo, DeIdentifyResult } from "../shared/types.js";
 import "../shared/styles.css";
 
 const root = document.getElementById("root")!;
@@ -72,7 +72,7 @@ function highlightText(
   return html;
 }
 
-function renderResult(data: DehydrateResult): void {
+function renderResult(data: DeIdentifyResult): void {
   const entities = data.entities || [];
   const entityTypes = new Map<string, EntityInfo[]>();
   for (const e of entities) {
@@ -155,10 +155,10 @@ function renderResult(data: DehydrateResult): void {
 
       <div class="panel" style="margin-bottom: 16px;">
         <div class="tab-bar">
-          <button class="tab active" data-tab="dehydrated">Dehydrated</button>
+          <button class="tab active" data-tab="de-identified">De-identified</button>
           <button class="tab" data-tab="original">Original</button>
         </div>
-        <div class="tab-content active" data-tab-content="dehydrated">
+        <div class="tab-content active" data-tab-content="de-identified">
           <div class="panel-body">${outputHighlighted}</div>
         </div>
         <div class="tab-content" data-tab-content="original">
@@ -218,7 +218,7 @@ function escapeHtml(text: string): string {
 }
 
 // Set up MCP App
-const app = new App({ name: "Skyflow Dehydrate", version: "1.0.0" });
+const app = new App({ name: "Skyflow De-identify", version: "1.0.0" });
 
 setupHostTheming(app);
 
@@ -228,7 +228,7 @@ app.ontoolinput = (params) => {
 };
 
 app.ontoolresult = (result: CallToolResult) => {
-  const data = (result as { structuredContent?: DehydrateResult }).structuredContent;
+  const data = (result as { structuredContent?: DeIdentifyResult }).structuredContent;
   if (data) {
     renderResult(data);
   }

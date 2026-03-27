@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleRehydrate } from "../../../src/lib/tools/rehydrate";
-import type { RehydrateOutput, RehydrateErrorOutput, AnonymousModeError } from "../../../src/lib/tools/types";
+import { handleReIdentify } from "../../../src/lib/tools/reIdentify";
+import type { ReIdentifyOutput, ReIdentifyErrorOutput, AnonymousModeError } from "../../../src/lib/tools/types";
 
 // Mock the skyflow-node SDK
 const mockReidentifyText = vi.fn();
@@ -28,7 +28,7 @@ function createMockSkyflow(response: { processedText: string }) {
   } as unknown;
 }
 
-describe("handleRehydrate", () => {
+describe("handleReIdentify", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -37,7 +37,7 @@ describe("handleRehydrate", () => {
     it("should return inputText and processedText", async () => {
       const skyflow = createMockSkyflow({ processedText: "My email is john@example.com" });
       const input = "My email is [EMAIL_ADDRESS_abc123]";
-      const result = await handleRehydrate(input, skyflow as any, false);
+      const result = await handleReIdentify(input, skyflow as any, false);
 
       expect(result.isError).toBeUndefined();
       expect(result.output).toHaveProperty("inputText");
@@ -47,16 +47,16 @@ describe("handleRehydrate", () => {
     it("should pass through inputText from the original input", async () => {
       const skyflow = createMockSkyflow({ processedText: "restored text" });
       const input = "tokenized input [SSN_abc123]";
-      const result = await handleRehydrate(input, skyflow as any, false);
-      const output = result.output as RehydrateOutput;
+      const result = await handleReIdentify(input, skyflow as any, false);
+      const output = result.output as ReIdentifyOutput;
 
       expect(output.inputText).toBe(input);
     });
 
     it("should return the restored text from Skyflow", async () => {
       const skyflow = createMockSkyflow({ processedText: "My SSN is 123-45-6789" });
-      const result = await handleRehydrate("My SSN is [SSN_abc123]", skyflow as any, false);
-      const output = result.output as RehydrateOutput;
+      const result = await handleReIdentify("My SSN is [SSN_abc123]", skyflow as any, false);
+      const output = result.output as ReIdentifyOutput;
 
       expect(output.processedText).toBe("My SSN is 123-45-6789");
     });
@@ -65,7 +65,7 @@ describe("handleRehydrate", () => {
   describe("anonymous mode", () => {
     it("should return error with anonymousModeRestricted flag", async () => {
       const skyflow = createMockSkyflow({ processedText: "" });
-      const result = await handleRehydrate("test", skyflow as any, true);
+      const result = await handleReIdentify("test", skyflow as any, true);
 
       expect(result.isError).toBe(true);
       expect(result.output).toHaveProperty("anonymousModeRestricted", true);
@@ -73,7 +73,7 @@ describe("handleRehydrate", () => {
 
     it("should include setup instructions in error message", async () => {
       const skyflow = createMockSkyflow({ processedText: "" });
-      const result = await handleRehydrate("test", skyflow as any, true);
+      const result = await handleReIdentify("test", skyflow as any, true);
       const output = result.output as AnonymousModeError;
 
       expect(output.message).toContain("Skyflow credentials");
@@ -82,7 +82,7 @@ describe("handleRehydrate", () => {
 
     it("should not call the Skyflow API in anonymous mode", async () => {
       const skyflow = createMockSkyflow({ processedText: "" });
-      await handleRehydrate("test", skyflow as any, true);
+      await handleReIdentify("test", skyflow as any, true);
 
       expect((skyflow as any).detect).not.toHaveBeenCalled();
     });
@@ -100,8 +100,8 @@ describe("handleRehydrate", () => {
         })),
       };
 
-      const result = await handleRehydrate("test input", skyflow as any, false);
-      const output = result.output as RehydrateErrorOutput;
+      const result = await handleReIdentify("test input", skyflow as any, false);
+      const output = result.output as ReIdentifyErrorOutput;
 
       expect(result.isError).toBe(true);
       expect(output.error).toBe(true);
@@ -119,8 +119,8 @@ describe("handleRehydrate", () => {
         })),
       };
 
-      const result = await handleRehydrate("test input", skyflow as any, false);
-      const output = result.output as RehydrateErrorOutput;
+      const result = await handleReIdentify("test input", skyflow as any, false);
+      const output = result.output as ReIdentifyErrorOutput;
 
       expect(result.isError).toBe(true);
       expect(output.error).toBe(true);
@@ -136,8 +136,8 @@ describe("handleRehydrate", () => {
         })),
       };
 
-      const result = await handleRehydrate("test input", skyflow as any, false);
-      const output = result.output as RehydrateErrorOutput;
+      const result = await handleReIdentify("test input", skyflow as any, false);
+      const output = result.output as ReIdentifyErrorOutput;
 
       expect(result.isError).toBe(true);
       expect(output.message).toBe("Unknown error occurred");

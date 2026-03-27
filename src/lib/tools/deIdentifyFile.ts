@@ -10,31 +10,31 @@ import {
   getTranscriptionEnum,
 } from "../mappings/entityMaps.js";
 import type {
-  DehydrateFileArgs,
-  DehydrateFileOutput,
-  DehydrateFileErrorOutput,
+  DeIdentifyFileArgs,
+  DeIdentifyFileOutput,
+  DeIdentifyFileErrorOutput,
   AnonymousModeError,
   DetectedEntityItem,
   ToolResult,
 } from "./types.js";
 
-/** Default maximum wait time for file dehydration operations (in seconds) */
+/** Default maximum wait time for file de-identification operations (in seconds) */
 export const DEFAULT_MAX_WAIT_TIME_SECONDS = 64;
 
 /**
- * Handle the dehydrate_file tool logic.
+ * Handle the de-identify_file tool logic.
  * Processes files to detect and redact sensitive information.
  */
-export async function handleDehydrateFile(
-  args: DehydrateFileArgs,
+export async function handleDeIdentifyFile(
+  args: DeIdentifyFileArgs,
   skyflow: Skyflow,
   vaultId: string,
   anonymousMode: boolean
-): Promise<ToolResult<DehydrateFileOutput | AnonymousModeError | DehydrateFileErrorOutput>> {
+): Promise<ToolResult<DeIdentifyFileOutput | AnonymousModeError | DeIdentifyFileErrorOutput>> {
   if (anonymousMode) {
     return {
       output: {
-        error: "dehydrate_file is not available in anonymous mode",
+        error: "de-identify_file is not available in anonymous mode",
         anonymousModeRestricted: true,
         message:
           "File deidentification requires authenticated access for secure processing. " +
@@ -42,9 +42,9 @@ export async function handleDehydrateFile(
           "1. Get your API key from the Skyflow dashboard\n" +
           "2. Add via Authorization header: 'Bearer <api-key>'\n" +
           "   Or via query parameter: '?apiKey=<api-key>'\n\n" +
-          "For text-only deidentification, you can use the 'dehydrate' tool in anonymous mode.",
+          "For text-only deidentification, you can use the 'de-identify' tool in anonymous mode.",
         helpUrl: "https://docs.skyflow.com/",
-        alternativeTool: "dehydrate",
+        alternativeTool: "de-identify",
       },
       isError: true,
     };
@@ -127,7 +127,7 @@ export async function handleDehydrateFile(
       .deidentifyFile(fileReq, options);
 
     // Prepare the output with proper typing
-    const output: DehydrateFileOutput = {
+    const output: DeIdentifyFileOutput = {
       inputFileName: fileName,
       inputMimeType: mimeType,
     };

@@ -38,12 +38,12 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
   -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
-# Call dehydrate tool
+# Call de-identify tool
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer {your_bearer_token}" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"dehydrate","arguments":{"inputString":"My email is john.doe@example.com"}},"id":2}'
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"de-identify","arguments":{"inputString":"My email is john.doe@example.com"}},"id":2}'
 ```
 
 ## Architecture
@@ -57,13 +57,13 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Configured with 5MB JSON payload limit to support base64-encoded files
 
 **MCP Server Instance**
-- Registers three main tools: `dehydrate`, `rehydrate`, and `dehydrate_file`
+- Registers three main tools: `de-identify`, `re-identify`, and `de-identify_file`
 - Each tool is registered via `registerAppTool` from `@modelcontextprotocol/ext-apps/server`, linking tools to interactive UI resources
 - Each tool is defined with Zod schemas for input validation and output structure
 - Uses the official `@modelcontextprotocol/sdk` library
 
 **MCP Apps UI Layer** (`ui/`)
-- Each tool has a corresponding vanilla TypeScript UI in `ui/{dehydrate,rehydrate,dehydrate-file}/`
+- Each tool has a corresponding vanilla TypeScript UI in `ui/{de-identify,re-identify,de-identify-file}/`
 - Shared theme/styles in `ui/shared/` (theme.ts, styles.css)
 - Built with Vite + `vite-plugin-singlefile` → single HTML files in `dist/ui/`
 - Resources registered via `registerAppResource` with `ui://` URIs
@@ -86,19 +86,19 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 
 ### Tool Implementations
 
-**dehydrate tool** (`src/lib/tools/dehydrate.ts`)
+**de-identify tool** (`src/lib/tools/deIdentify.ts`)
 - Detects and replaces sensitive information with tokens
 - Returns `inputText`, `processedText`, `wordCount`, `charCount`, and `entities` array
 - Each entity includes `token`, `value`, `entity`, `textIndex`, `processedIndex`, `scores`
 - Uses `TokenFormat` with `VAULT_TOKEN` type in authenticated mode, `ENTITY_UNIQUE_COUNTER` in anonymous mode
 - In anonymous mode, adds `anonymousMode: true` and a note to the response
 
-**rehydrate tool** (`src/lib/tools/rehydrate.ts`)
-- Reverses dehydration by replacing tokens with original sensitive data
+**re-identify tool** (`src/lib/tools/reIdentify.ts`)
+- Reverses de-identification by replacing tokens with original sensitive data
 - Returns `inputText` and `processedText`
 - Returns error with `anonymousModeRestricted: true` in anonymous mode
 
-**dehydrate_file tool** (`src/lib/tools/dehydrateFile.ts`)
+**de-identify_file tool** (`src/lib/tools/deIdentifyFile.ts`)
 - Most complex tool - handles images, PDFs, audio, and documents
 - Returns `inputFileName`, `inputMimeType`, and optional response fields from Skyflow
 - Accepts base64-encoded file data (max 5MB encoded, ~3.75MB original)
@@ -113,6 +113,7 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Core logic is in `src/lib/tools/*.ts` as pure functions with explicit parameters
 - `src/server.ts` calls these functions, passing `getCurrentSkyflow()`, `getCurrentVaultId()`, `isAnonymousMode()`
 - Shared types live in `src/lib/tools/types.ts`
+- Tool files: `deIdentify.ts`, `reIdentify.ts`, `deIdentifyFile.ts`
 - This separation enables unit testing without `AsyncLocalStorage` context
 
 ### Type Safety Approach
@@ -175,13 +176,13 @@ When no credentials are provided in a request, the server can operate in "anonym
 
 | Tool | Anonymous Mode | Authenticated Mode |
 |------|---------------|-------------------|
-| `dehydrate` | Works with `ENTITY_UNIQUE_COUNTER` tokens | Works with `VAULT_TOKEN` tokens |
-| `rehydrate` | Returns error with setup instructions | Works normally |
-| `dehydrate_file` | Returns error with setup instructions | Works normally |
+| `de-identify` | Works with `ENTITY_UNIQUE_COUNTER` tokens | Works with `VAULT_TOKEN` tokens |
+| `re-identify` | Returns error with setup instructions | Works normally |
+| `de-identify_file` | Returns error with setup instructions | Works normally |
 
 **Token Format Difference**:
 - **Anonymous mode**: Uses `TokenType.ENTITY_UNIQUE_COUNTER` - generates tokens like `[EMAIL_ADDRESS_1]`, `[SSN_2]`. Data is NOT persisted to vault.
-- **Authenticated mode**: Uses `TokenType.VAULT_TOKEN` - generates tokens like `[EMAIL_ADDRESS_abc123xyz]` that are stored in the vault and can be rehydrated.
+- **Authenticated mode**: Uses `TokenType.VAULT_TOKEN` - generates tokens like `[EMAIL_ADDRESS_abc123xyz]` that are stored in the vault and can be re-identified.
 
 **Rate Limiting**:
 Anonymous mode requests are rate-limited based on client IP address. When the limit is exceeded, a 429 response is returned with `X-RateLimit-*` headers indicating when the limit resets.
@@ -279,7 +280,7 @@ return {
 };
 ```
 
-The `isError` property is set to `true` when a tool returns an error condition (e.g., when `rehydrate` or `dehydrate_file` are called in anonymous mode, or when Skyflow API returns an error). This allows MCP clients to distinguish between successful responses and error responses.
+The `isError` property is set to `true` when a tool returns an error condition (e.g., when `re-identify` or `de-identify_file` are called in anonymous mode, or when Skyflow API returns an error). This allows MCP clients to distinguish between successful responses and error responses.
 
 ## Dependencies
 
@@ -301,5 +302,5 @@ The `isError` property is set to `true` when a tool returns an error condition (
 5. **Vault configuration** - `clusterId` is automatically extracted from `vaultUrl`, don't set it separately
 6. **Entity type validation** - Use exact strings from `ENTITY_MAP` keys, not the enum values
 7. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
-8. **Anonymous mode limitations** - Only the `dehydrate` tool works in anonymous mode; `rehydrate` and `dehydrate_file` return errors with setup instructions
+8. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; `re-identify` and `de-identify_file` return errors with setup instructions
 9. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.

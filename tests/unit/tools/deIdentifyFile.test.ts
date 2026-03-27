@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleDehydrateFile, DEFAULT_MAX_WAIT_TIME_SECONDS } from "../../../src/lib/tools/dehydrateFile";
-import type { DehydrateFileArgs, DehydrateFileOutput, DehydrateFileErrorOutput, AnonymousModeError } from "../../../src/lib/tools/types";
+import { handleDeIdentifyFile, DEFAULT_MAX_WAIT_TIME_SECONDS } from "../../../src/lib/tools/deIdentifyFile";
+import type { DeIdentifyFileArgs, DeIdentifyFileOutput, DeIdentifyFileErrorOutput, AnonymousModeError } from "../../../src/lib/tools/types";
 
 // Mock the skyflow-node SDK
 const mockSetEntities = vi.fn();
@@ -55,13 +55,13 @@ function createMockSkyflow(response: Record<string, unknown> = {}) {
   } as unknown;
 }
 
-const baseArgs: DehydrateFileArgs = {
+const baseArgs: DeIdentifyFileArgs = {
   fileData: Buffer.from("test file content").toString("base64"),
   fileName: "test.png",
   mimeType: "image/png",
 };
 
-describe("handleDehydrateFile", () => {
+describe("handleDeIdentifyFile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -69,23 +69,23 @@ describe("handleDehydrateFile", () => {
   describe("anonymous mode", () => {
     it("should return error with anonymousModeRestricted flag", async () => {
       const skyflow = createMockSkyflow();
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", true);
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", true);
 
       expect(result.isError).toBe(true);
       expect(result.output).toHaveProperty("anonymousModeRestricted", true);
     });
 
-    it("should suggest dehydrate as alternative tool", async () => {
+    it("should suggest de-identify as alternative tool", async () => {
       const skyflow = createMockSkyflow();
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", true);
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", true);
       const output = result.output as AnonymousModeError;
 
-      expect(output.alternativeTool).toBe("dehydrate");
+      expect(output.alternativeTool).toBe("de-identify");
     });
 
     it("should not call the Skyflow API in anonymous mode", async () => {
       const skyflow = createMockSkyflow();
-      await handleDehydrateFile(baseArgs, skyflow as any, "vault123", true);
+      await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", true);
 
       expect((skyflow as any).detect).not.toHaveBeenCalled();
     });
@@ -94,8 +94,8 @@ describe("handleDehydrateFile", () => {
   describe("authenticated mode", () => {
     it("should include inputFileName and inputMimeType in output", async () => {
       const skyflow = createMockSkyflow({});
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as DehydrateFileOutput;
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
 
       expect(result.isError).toBeUndefined();
       expect(output.inputFileName).toBe("test.png");
@@ -104,7 +104,7 @@ describe("handleDehydrateFile", () => {
 
     it("should set outputProcessedImage for image mime types", async () => {
       const skyflow = createMockSkyflow({});
-      await handleDehydrateFile(
+      await handleDeIdentifyFile(
         { ...baseArgs, mimeType: "image/jpeg", outputProcessedFile: true },
         skyflow as any, "vault123", false
       );
@@ -115,7 +115,7 @@ describe("handleDehydrateFile", () => {
 
     it("should set outputProcessedAudio for audio mime types", async () => {
       const skyflow = createMockSkyflow({});
-      await handleDehydrateFile(
+      await handleDeIdentifyFile(
         { ...baseArgs, mimeType: "audio/mp3", outputProcessedFile: true },
         skyflow as any, "vault123", false
       );
@@ -126,7 +126,7 @@ describe("handleDehydrateFile", () => {
 
     it("should map entity strings to enums", async () => {
       const skyflow = createMockSkyflow({});
-      await handleDehydrateFile(
+      await handleDeIdentifyFile(
         { ...baseArgs, entities: ["email_address", "ssn"] },
         skyflow as any, "vault123", false
       );
@@ -136,7 +136,7 @@ describe("handleDehydrateFile", () => {
 
     it("should map masking method to enum", async () => {
       const skyflow = createMockSkyflow({});
-      await handleDehydrateFile(
+      await handleDeIdentifyFile(
         { ...baseArgs, maskingMethod: "BLUR" },
         skyflow as any, "vault123", false
       );
@@ -146,14 +146,14 @@ describe("handleDehydrateFile", () => {
 
     it("should use DEFAULT_MAX_WAIT_TIME_SECONDS when waitTime not specified", async () => {
       const skyflow = createMockSkyflow({});
-      await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
+      await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
 
       expect(mockSetWaitTime).toHaveBeenCalledWith(DEFAULT_MAX_WAIT_TIME_SECONDS);
     });
 
     it("should use provided waitTime when specified", async () => {
       const skyflow = createMockSkyflow({});
-      await handleDehydrateFile(
+      await handleDeIdentifyFile(
         { ...baseArgs, waitTime: 30 },
         skyflow as any, "vault123", false
       );
@@ -176,8 +176,8 @@ describe("handleDehydrateFile", () => {
         runId: "run_123",
         status: "completed",
       });
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as DehydrateFileOutput;
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
 
       expect(output.processedFileData).toBe("base64data");
       expect(output.mimeType).toBe("image/png");
@@ -195,8 +195,8 @@ describe("handleDehydrateFile", () => {
 
     it("should omit optional fields when not in response", async () => {
       const skyflow = createMockSkyflow({});
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as DehydrateFileOutput;
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
 
       expect(output.processedFileData).toBeUndefined();
       expect(output.wordCount).toBeUndefined();
@@ -217,8 +217,8 @@ describe("handleDehydrateFile", () => {
         })),
       };
 
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as DehydrateFileErrorOutput;
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileErrorOutput;
 
       expect(result.isError).toBe(true);
       expect(output.error).toBe(true);
@@ -236,8 +236,8 @@ describe("handleDehydrateFile", () => {
         })),
       };
 
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as DehydrateFileErrorOutput;
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileErrorOutput;
 
       expect(result.isError).toBe(true);
       expect(output.error).toBe(true);
@@ -253,8 +253,8 @@ describe("handleDehydrateFile", () => {
         })),
       };
 
-      const result = await handleDehydrateFile(baseArgs, skyflow as any, "vault123", false);
-      const output = result.output as DehydrateFileErrorOutput;
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileErrorOutput;
 
       expect(result.isError).toBe(true);
       expect(output.message).toBe("Unknown error occurred");

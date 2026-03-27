@@ -98,6 +98,6 @@ Coverage reports are generated in the `coverage/` directory (git-ignored).
 
 The tool handler tests (`tests/unit/tools/`) cover:
 
-- **dehydrate**: Output shape, entity metadata, token format by mode, anonymous mode flags
-- **rehydrate**: Output shape, inputText passthrough, anonymous mode error
-- **dehydrateFile**: File metadata passthrough, image/audio processing, entity/masking mapping, wait time defaults, optional fields, SkyflowError handling, generic error handling, anonymous mode error
+- **de-identify**: Output shape, entity metadata, token format by mode, anonymous mode flags
+- **re-identify**: Output shape, inputText passthrough, anonymous mode error
+- **de-identify_file**: File metadata passthrough, image/audio processing, entity/masking mapping, wait time defaults, optional fields, SkyflowError handling, generic error handling, anonymous mode error

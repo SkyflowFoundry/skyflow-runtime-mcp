@@ -1,23 +1,23 @@
 import { ReidentifyTextRequest, SkyflowError } from "skyflow-node";
 import type { Skyflow } from "skyflow-node";
-import type { RehydrateOutput, RehydrateErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
+import type { ReIdentifyOutput, ReIdentifyErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
 
 /**
- * Handle the rehydrate tool logic.
- * Restores original sensitive data from dehydrated placeholders.
+ * Handle the re-identify tool logic.
+ * Restores original sensitive data from de-identified placeholders.
  */
-export async function handleRehydrate(
+export async function handleReIdentify(
   inputString: string,
   skyflow: Skyflow,
   anonymousMode: boolean
-): Promise<ToolResult<RehydrateOutput | AnonymousModeError | RehydrateErrorOutput>> {
+): Promise<ToolResult<ReIdentifyOutput | AnonymousModeError | ReIdentifyErrorOutput>> {
   if (anonymousMode) {
     return {
       output: {
-        error: "rehydrate is not available in anonymous mode",
+        error: "re-identify is not available in anonymous mode",
         anonymousModeRestricted: true,
         message:
-          "The rehydrate tool requires authenticated access to restore sensitive data from vault tokens. " +
+          "The re-identify tool requires authenticated access to restore sensitive data from vault tokens. " +
           "To use this feature, configure your Skyflow credentials:\n\n" +
           "1. Get your API key from the Skyflow dashboard\n" +
           "2. Add via Authorization header: 'Bearer <api-key>'\n" +

@@ -1,7 +1,7 @@
 import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { setupHostTheming, applyInitialContext } from "../shared/theme.js";
-import type { DehydrateFileResult } from "../shared/types.js";
+import type { DeIdentifyFileResult } from "../shared/types.js";
 import "../shared/styles.css";
 
 const root = document.getElementById("root")!;
@@ -51,7 +51,7 @@ function formatDuration(seconds: number): string {
   return `${Math.round(seconds)}s`;
 }
 
-function renderResult(data: DehydrateFileResult): void {
+function renderResult(data: DeIdentifyFileResult): void {
   if (data.error || data.anonymousModeRestricted) {
     root.innerHTML = `
       <div class="container">
@@ -165,7 +165,7 @@ function renderResult(data: DehydrateFileResult): void {
 }
 
 // Set up MCP App
-const app = new App({ name: "Skyflow Dehydrate File", version: "1.0.0" });
+const app = new App({ name: "Skyflow De-identify File", version: "1.0.0" });
 
 setupHostTheming(app);
 
@@ -178,7 +178,7 @@ app.ontoolinput = (params) => {
 };
 
 app.ontoolresult = (result: CallToolResult) => {
-  const data = (result as { structuredContent?: DehydrateFileResult }).structuredContent;
+  const data = (result as { structuredContent?: DeIdentifyFileResult }).structuredContent;
   if (data) {
     renderResult(data);
   }

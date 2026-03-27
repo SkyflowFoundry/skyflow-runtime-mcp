@@ -8,8 +8,8 @@ export interface EntityInfo {
   scores?: Record<string, number>;
 }
 
-/** Result from the dehydrate tool */
-export interface DehydrateResult {
+/** Result from the de-identify tool */
+export interface DeIdentifyResult {
   inputText?: string;
   processedText?: string;
   wordCount?: number;
@@ -19,8 +19,8 @@ export interface DehydrateResult {
   note?: string;
 }
 
-/** Result from the rehydrate tool */
-export interface RehydrateResult {
+/** Result from the re-identify tool */
+export interface ReIdentifyResult {
   inputText?: string;
   processedText?: string;
   error?: string;
@@ -28,8 +28,8 @@ export interface RehydrateResult {
   anonymousModeRestricted?: boolean;
 }
 
-/** Result from the dehydrate_file tool */
-export interface DehydrateFileResult {
+/** Result from the de-identify_file tool */
+export interface DeIdentifyFileResult {
   inputFileName?: string;
   inputMimeType?: string;
   processedFileData?: string;

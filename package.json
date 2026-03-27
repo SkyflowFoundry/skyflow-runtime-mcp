@@ -9,7 +9,7 @@
 		"dev": "./dev.sh",
 		"build": "pnpm build:ui && pnpm build:ui-imports && pnpm build:server",
 		"build:ui-imports": "npx -y tsx scripts/generate-ui-imports.ts",
-		"build:ui": "cd ui && INPUT=dehydrate/mcp-app.html vite build && INPUT=rehydrate/mcp-app.html vite build && INPUT=dehydrate-file/mcp-app.html vite build",
+		"build:ui": "cd ui && INPUT=de-identify/mcp-app.html vite build && INPUT=re-identify/mcp-app.html vite build && INPUT=de-identify-file/mcp-app.html vite build",
 		"build:server": "tsc",
 		"start": "node dist/server.js",
 		"server": "npx -y tsx src/server.ts",
