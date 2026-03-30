@@ -57,13 +57,14 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Configured with 5MB JSON payload limit to support base64-encoded files
 
 **MCP Server Instance**
-- Registers three main tools: `de-identify`, `re-identify`, and `de-identify_file`
+- Registers two active tools: `de-identify` and `re-identify`
 - Each tool is registered via `registerAppTool` from `@modelcontextprotocol/ext-apps/server`, linking tools to interactive UI resources
 - Each tool is defined with Zod schemas for input validation and output structure
 - Uses the official `@modelcontextprotocol/sdk` library
 
 **MCP Apps UI Layer** (`ui/`)
-- Each tool has a corresponding vanilla TypeScript UI in `ui/{de-identify,re-identify,de-identify-file}/`
+- Active tool UIs: `ui/de-identify/` and `ui/re-identify/`
+- `ui/de-identify-file/` exists but its resource is not registered (tool is disabled)
 - Shared theme/styles in `ui/shared/` (theme.ts, styles.css)
 - Built with Vite + `vite-plugin-singlefile` → single HTML files in `dist/ui/`
 - Resources registered via `registerAppResource` with `ui://` URIs
@@ -82,12 +83,13 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Supports **two credential types**: bearer token (from Authorization header) or API key (from query parameter)
 - Credentials are forwarded to Skyflow API in the appropriate format: `{ token: string }` or `{ apiKey: string }`
 - Uses `AsyncLocalStorage` to make Skyflow instance available to tools during request handling
-- Tools access the current request's Skyflow instance via `getCurrentSkyflow()` and `getCurrentVaultId()`
+- Tools access the current request's Skyflow instance via `getCurrentSkyflow()` and mode via `isAnonymousMode()`
 
 ### Tool Implementations
 
 **de-identify tool** (`src/lib/tools/deIdentify.ts`)
 - Detects and replaces sensitive information with tokens
+- Accepts optional `entities` array to limit detection to specific entity types (e.g., `["email_address", "ssn"]`); detects all types when omitted
 - Returns `inputText`, `processedText`, `wordCount`, `charCount`, and `entities` array
 - Each entity includes `token`, `value`, `entity`, `textIndex`, `processedIndex`, `scores`
 - Uses `TokenFormat` with `VAULT_TOKEN` type in authenticated mode, `ENTITY_UNIQUE_COUNTER` in anonymous mode
@@ -99,19 +101,12 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Returns error with `anonymousModeRestricted: true` in anonymous mode
 
 **de-identify_file tool** (`src/lib/tools/deIdentifyFile.ts`)
-- Most complex tool - handles images, PDFs, audio, and documents
-- Returns `inputFileName`, `inputMimeType`, and optional response fields from Skyflow
-- Accepts base64-encoded file data (max 5MB encoded, ~3.75MB original)
-- Supports entity-specific detection (59 entity types mapped in `ENTITY_MAP`)
-- Configurable masking methods for images (BLACKBOX, BLUR)
-- Optional outputs: processed file, OCR text, transcription for audio
-- Includes detailed error handling for `SkyflowError` instances
-- Uses `waitTime` parameter (max 64 seconds) for async operations
-- Returns error with `anonymousModeRestricted: true` in anonymous mode
+- Currently disabled (not registered) — handler code preserved in `deIdentifyFile.ts` for future re-enablement
+- Was used to process images, PDFs, audio, and documents
 
 **Tool handler extraction pattern**
 - Core logic is in `src/lib/tools/*.ts` as pure functions with explicit parameters
-- `src/server.ts` calls these functions, passing `getCurrentSkyflow()`, `getCurrentVaultId()`, `isAnonymousMode()`
+- `src/server.ts` calls these functions, passing `getCurrentSkyflow()`, `isAnonymousMode()`
 - Shared types live in `src/lib/tools/types.ts`
 - Tool files: `deIdentify.ts`, `reIdentify.ts`, `deIdentifyFile.ts`
 - This separation enables unit testing without `AsyncLocalStorage` context
@@ -178,7 +173,6 @@ When no credentials are provided in a request, the server can operate in "anonym
 |------|---------------|-------------------|
 | `de-identify` | Works with `ENTITY_UNIQUE_COUNTER` tokens | Works with `VAULT_TOKEN` tokens |
 | `re-identify` | Returns error with setup instructions | Works normally |
-| `de-identify_file` | Returns error with setup instructions | Works normally |
 
 **Token Format Difference**:
 - **Anonymous mode**: Uses `TokenType.ENTITY_UNIQUE_COUNTER` - generates tokens like `[EMAIL_ADDRESS_1]`, `[SSN_2]`. Data is NOT persisted to vault.
@@ -280,7 +274,7 @@ return {
 };
 ```
 
-The `isError` property is set to `true` when a tool returns an error condition (e.g., when `re-identify` or `de-identify_file` are called in anonymous mode, or when Skyflow API returns an error). This allows MCP clients to distinguish between successful responses and error responses.
+The `isError` property is set to `true` when a tool returns an error condition (e.g., when `re-identify` is called in anonymous mode, or when Skyflow API returns an error). This allows MCP clients to distinguish between successful responses and error responses.
 
 ## Dependencies
 
@@ -293,14 +287,45 @@ The `isError` property is set to `true` when a tool returns an error condition (
 - `tsx`: TypeScript execution (via npx)
 - `vite` + `vite-plugin-singlefile`: UI build pipeline (dev dependencies)
 
+## Modifying Tools
+
+Use this checklist whenever you add, remove, or change a tool's inputs or outputs. Missing any of these is the most common source of bugs and build errors in this codebase.
+
+### When changing a tool's input or output schema
+
+- [ ] **Handler function** (`src/lib/tools/<tool>.ts`) — update the function signature and implementation
+- [ ] **`inputSchema` / `outputSchema`** in `src/server.ts` — the Zod schemas registered with `registerAppTool` must exactly match what the handler accepts and returns; TypeScript will catch mismatches on build
+- [ ] **Handler call site** in `src/server.ts` — destructure any new args from the tool callback and pass them through
+- [ ] **Unit tests** (`tests/unit/tools/<tool>.test.ts`) — update existing call sites to match the new signature; add tests for new parameters
+- [ ] **UI types** (`ui/shared/types.ts`) — if the result shape changes, update the shared interface used by the UI
+- [ ] **UI rendering** (`ui/<tool-name>/main.ts`) — if new result fields should be displayed or the UI reads new input args, update accordingly
+- [ ] **CLAUDE.md** — update the Tool Implementations description and Anonymous Mode table if behavior changes
+
+### When adding a new tool
+
+All of the above, plus:
+
+- [ ] **New handler file** `src/lib/tools/<tool>.ts` — follow the existing pattern: pure function, explicit params, returns `ToolResult<Output | ErrorOutput>`
+- [ ] **Register resource** in `src/server.ts` — add `registerAppResource` with a `ui://<tool>/mcp-app.html` URI
+- [ ] **Register tool** in `src/server.ts` — add `registerAppTool` with `inputSchema`, `outputSchema`, `_meta.ui.resourceUri`, and the async handler
+- [ ] **New UI** `ui/<tool-name>/main.ts` — implement `ontoolinput` (loading state) and `ontoolresult` (result rendering)
+- [ ] **Update MCP Server Instance count** in this file
+
+### When disabling a tool
+
+- [ ] Remove `registerAppTool` and `registerAppResource` calls from `src/server.ts`
+- [ ] Remove unused HTML import from `./generated/ui-html.js`
+- [ ] Remove unused handler import; keep the handler file itself for future re-enablement
+- [ ] Remove any helper functions only used by that tool (e.g. `getCurrentVaultId` was removed when `de-identify_file` was disabled)
+- [ ] Update CLAUDE.md: tool count, Tool Implementations section, Anonymous Mode table, Common Pitfalls
+
 ## Common Pitfalls
 
 1. **Don't reuse transport or Skyflow instances** - Always create new ones per request
-2. **File size limits** - Base64 encoding adds ~33% overhead; 5MB limit means ~3.75MB original files
-3. **Credentials or anonymous mode required** - All `/mcp` requests must include valid credentials OR anonymous mode must be configured via `ANON_MODE_*` environment variables
-4. **Query parameters required** - `vaultId` and `vaultUrl` must be provided (via query params or env vars) - unless using anonymous mode
-5. **Vault configuration** - `clusterId` is automatically extracted from `vaultUrl`, don't set it separately
-6. **Entity type validation** - Use exact strings from `ENTITY_MAP` keys, not the enum values
-7. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
-8. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; `re-identify` and `de-identify_file` return errors with setup instructions
-9. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.
+2. **Credentials or anonymous mode required** - All `/mcp` requests must include valid credentials OR anonymous mode must be configured via `ANON_MODE_*` environment variables
+3. **Query parameters required** - `vaultId` and `vaultUrl` must be provided (via query params or env vars) - unless using anonymous mode
+4. **Vault configuration** - `clusterId` is automatically extracted from `vaultUrl`, don't set it separately
+5. **Entity type validation** - Use exact strings from `ENTITY_MAP` keys, not the enum values
+6. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
+7. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; `re-identify` returns an error with setup instructions
+8. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.
