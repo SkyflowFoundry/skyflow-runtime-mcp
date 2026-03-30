@@ -11,13 +11,12 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import express, { type Express } from "express";
 import { z } from "zod";
-import { deIdentifyHtml, reIdentifyHtml, deIdentifyFileHtml } from "./generated/ui-html.js";
+import { deIdentifyHtml, reIdentifyHtml } from "./generated/ui-html.js";
 import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
 import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
 import { handleDeIdentify } from "./lib/tools/deIdentify.js";
 import { handleReIdentify } from "./lib/tools/reIdentify.js";
-import { handleDeIdentifyFile } from "./lib/tools/deIdentifyFile.js";
 import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
@@ -49,17 +48,6 @@ function getCurrentSkyflow(): Skyflow {
 }
 
 /**
- * Get the vaultId for the current request context
- */
-function getCurrentVaultId(): string {
-  const context = requestContextStorage.getStore();
-  if (!context) {
-    throw new Error("No vaultId available in current request context");
-  }
-  return context.vaultId;
-}
-
-/**
  * Check if the current request is in anonymous mode
  */
 function isAnonymousMode(): boolean {
@@ -79,7 +67,6 @@ const server = new McpServer({
 // MCP Apps: Resource URIs
 const DE_IDENTIFY_RESOURCE_URI = "ui://de-identify/mcp-app.html";
 const RE_IDENTIFY_RESOURCE_URI = "ui://re-identify/mcp-app.html";
-const DE_IDENTIFY_FILE_RESOURCE_URI = "ui://de-identify-file/mcp-app.html";
 
 // Register UI resources for each tool
 registerAppResource(server, "De-identify UI", DE_IDENTIFY_RESOURCE_URI, {}, async () => ({
@@ -88,10 +75,6 @@ registerAppResource(server, "De-identify UI", DE_IDENTIFY_RESOURCE_URI, {}, asyn
 
 registerAppResource(server, "Re-identify UI", RE_IDENTIFY_RESOURCE_URI, {}, async () => ({
   contents: [{ uri: RE_IDENTIFY_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: reIdentifyHtml }],
-}));
-
-registerAppResource(server, "De-identify File UI", DE_IDENTIFY_FILE_RESOURCE_URI, {}, async () => ({
-  contents: [{ uri: DE_IDENTIFY_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: deIdentifyFileHtml }],
 }));
 
 /**
@@ -170,203 +153,6 @@ registerAppTool(
   },
   async ({ inputString }) => {
     const result = await handleReIdentify(inputString, getCurrentSkyflow(), isAnonymousMode());
-    return {
-      content: [{ type: "text", text: JSON.stringify(result.output) }],
-      structuredContent: toStructuredContent(result.output),
-      ...(result.isError && { isError: true }),
-    };
-  }
-);
-
-/**
- * Skyflow De-identify File Tool
- * Processes files to detect and redact sensitive information
- * Maximum file size: 5MB (due to base64 encoding overhead, original binary files should be ~3.75MB or less)
- */
-registerAppTool(
-  server,
-  "de-identify_file",
-  {
-    title: "Skyflow De-identify File Tool",
-    description:
-      "De-identify sensitive information in files (images, PDFs, audio, documents) using Skyflow. Accepts base64-encoded file data and returns the processed file with sensitive data redacted or masked. Maximum file size: 5MB (base64-encoded). Due to base64 encoding overhead, original binary files should be approximately 3.75MB or smaller.",
-    _meta: { ui: { resourceUri: DE_IDENTIFY_FILE_RESOURCE_URI } },
-    inputSchema: {
-      fileData: z.string().min(1).describe("Base64-encoded file content"),
-      fileName: z.string().describe("Original filename for type detection"),
-      mimeType: z
-        .string()
-        .optional()
-        .describe("MIME type of the file (e.g., image/png, audio/mp3)"),
-      entities: z
-        .array(
-          z.enum([
-            "age",
-            "bank_account",
-            "credit_card",
-            "credit_card_expiration",
-            "cvv",
-            "date",
-            "date_interval",
-            "dob",
-            "driver_license",
-            "email_address",
-            "healthcare_number",
-            "ip_address",
-            "location",
-            "name",
-            "numerical_pii",
-            "phone_number",
-            "ssn",
-            "url",
-            "vehicle_id",
-            "medical_code",
-            "name_family",
-            "name_given",
-            "account_number",
-            "event",
-            "filename",
-            "gender",
-            "language",
-            "location_address",
-            "location_city",
-            "location_coordinate",
-            "location_country",
-            "location_state",
-            "location_zip",
-            "marital_status",
-            "money",
-            "name_medical_professional",
-            "occupation",
-            "organization",
-            "organization_medical_facility",
-            "origin",
-            "passport_number",
-            "password",
-            "physical_attribute",
-            "political_affiliation",
-            "religion",
-            "time",
-            "username",
-            "zodiac_sign",
-            "blood_type",
-            "condition",
-            "dose",
-            "drug",
-            "injury",
-            "medical_process",
-            "statistics",
-            "routing_number",
-            "corporate_action",
-            "financial_metric",
-            "product",
-            "trend",
-            "duration",
-            "location_address_street",
-            "all",
-            "sexuality",
-            "effect",
-            "project",
-            "organization_id",
-            "day",
-            "month",
-          ])
-        )
-        .optional()
-        .describe(
-          "Specific entities to detect. Leave empty to detect all supported entities."
-        ),
-      maskingMethod: z
-        .enum(["BLACKBOX", "BLUR"])
-        .optional()
-        .describe("Masking method for images (BLACKBOX or BLUR)"),
-      outputProcessedFile: z
-        .boolean()
-        .optional()
-        .describe("Whether to include the processed file in the response. Only supported for image/* and audio/* files; not yet supported for PDFs or documents."),
-      outputOcrText: z
-        .boolean()
-        .optional()
-        .describe("For images/PDFs: include OCR text in response"),
-      outputTranscription: z
-        .enum(["PLAINTEXT_TRANSCRIPTION", "DIARIZED_TRANSCRIPTION"])
-        .optional()
-        .describe(
-          "For audio: type of transcription (PLAINTEXT_TRANSCRIPTION or DIARIZED_TRANSCRIPTION)"
-        ),
-      pixelDensity: z
-        .number()
-        .optional()
-        .describe("For PDFs: pixel density (default 300)"),
-      maxResolution: z
-        .number()
-        .optional()
-        .describe("For PDFs: max resolution (default 2000)"),
-      waitTime: z
-        .number()
-        .min(1)
-        .max(64)
-        .optional()
-        .describe("Wait time for response in seconds (max 64)"),
-    },
-    outputSchema: {
-      inputFileName: z.string().optional().describe("Original filename"),
-      inputMimeType: z.string().optional().describe("Original MIME type"),
-      processedFileData: z
-        .string()
-        .optional()
-        .describe("Base64-encoded processed file"),
-      mimeType: z
-        .string()
-        .optional()
-        .describe("MIME type of the processed file"),
-      extension: z
-        .string()
-        .optional()
-        .describe("File extension of the processed file"),
-      detectedEntities: z
-        .array(
-          z.object({
-            file: z
-              .string()
-              .describe("Base64-encoded file with redacted entity"),
-            extension: z.string().describe("File extension"),
-          })
-        )
-        .optional()
-        .describe("List of detected entities as separate files"),
-      wordCount: z.number().optional().describe("Number of words processed"),
-      charCount: z
-        .number()
-        .optional()
-        .describe("Number of characters processed"),
-      sizeInKb: z.number().optional().describe("Size of processed file in KB"),
-      durationInSeconds: z
-        .number()
-        .optional()
-        .describe("Duration for audio files in seconds"),
-      pageCount: z
-        .number()
-        .optional()
-        .describe("Number of pages for documents"),
-      slideCount: z
-        .number()
-        .optional()
-        .describe("Number of slides for presentations"),
-      runId: z.string().optional().describe("Run ID for async operations"),
-      status: z.string().optional().describe("Status of the operation"),
-      warnings: z.array(z.string()).optional().describe("Warnings about unsupported options for the given file type"),
-      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
-      anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
-      message: z.string().optional().describe("Detailed error or setup instructions"),
-      helpUrl: z.string().optional().describe("URL for setup documentation"),
-      alternativeTool: z.string().optional().describe("Suggested alternative tool to use"),
-      code: z.number().optional().describe("HTTP error code from Skyflow API"),
-      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
-    },
-  },
-  async (args) => {
-    const result = await handleDeIdentifyFile(args, getCurrentSkyflow(), getCurrentVaultId(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
       structuredContent: toStructuredContent(result.output),

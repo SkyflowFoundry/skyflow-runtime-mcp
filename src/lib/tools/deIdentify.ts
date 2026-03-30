@@ -6,6 +6,7 @@ import {
   TokenType,
 } from "skyflow-node";
 import type { Skyflow } from "skyflow-node";
+import { getEntityEnum } from "../mappings/entityMaps.js";
 import type { DeIdentifyOutput, DeIdentifyErrorOutput, ToolResult } from "./types.js";
 
 /**
@@ -14,6 +15,7 @@ import type { DeIdentifyOutput, DeIdentifyErrorOutput, ToolResult } from "./type
  */
 export async function handleDeIdentify(
   inputString: string,
+  entities: string[] | undefined,
   skyflow: Skyflow,
   anonymousMode: boolean
 ): Promise<ToolResult<DeIdentifyOutput | DeIdentifyErrorOutput>> {
@@ -27,6 +29,11 @@ export async function handleDeIdentify(
 
     const options = new DeidentifyTextOptions();
     options.setTokenFormat(tokenFormat);
+
+    if (entities && entities.length > 0) {
+      const entityEnums = entities.map((e) => getEntityEnum(e));
+      options.setEntities(entityEnums);
+    }
 
     const response = await skyflow
       .detect()
