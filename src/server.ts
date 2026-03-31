@@ -15,6 +15,7 @@ import { deIdentifyHtml, reIdentifyHtml } from "./generated/ui-html.js";
 import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
 import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
+import { ENTITY_KEYS } from "./lib/mappings/entityMaps.js";
 import { handleDeIdentify } from "./lib/tools/deIdentify.js";
 import { handleReIdentify } from "./lib/tools/reIdentify.js";
 import { toStructuredContent } from "./lib/tools/types.js";
@@ -91,79 +92,7 @@ registerAppTool(
     inputSchema: {
       inputString: z.string().min(1).describe("Original Text — paste the text you want to scan for sensitive data"),
       entities: z
-        .array(
-          z.enum([
-            "age",
-            "bank_account",
-            "credit_card",
-            "credit_card_expiration",
-            "cvv",
-            "date",
-            "date_interval",
-            "dob",
-            "driver_license",
-            "email_address",
-            "healthcare_number",
-            "ip_address",
-            "location",
-            "name",
-            "numerical_pii",
-            "phone_number",
-            "ssn",
-            "url",
-            "vehicle_id",
-            "medical_code",
-            "name_family",
-            "name_given",
-            "account_number",
-            "event",
-            "filename",
-            "gender",
-            "language",
-            "location_address",
-            "location_city",
-            "location_coordinate",
-            "location_country",
-            "location_state",
-            "location_zip",
-            "marital_status",
-            "money",
-            "name_medical_professional",
-            "occupation",
-            "organization",
-            "organization_medical_facility",
-            "origin",
-            "passport_number",
-            "password",
-            "physical_attribute",
-            "political_affiliation",
-            "religion",
-            "time",
-            "username",
-            "zodiac_sign",
-            "blood_type",
-            "condition",
-            "dose",
-            "drug",
-            "injury",
-            "medical_process",
-            "statistics",
-            "routing_number",
-            "corporate_action",
-            "financial_metric",
-            "product",
-            "trend",
-            "duration",
-            "location_address_street",
-            "all",
-            "sexuality",
-            "effect",
-            "project",
-            "organization_id",
-            "day",
-            "month",
-          ])
-        )
+        .array(z.enum(ENTITY_KEYS))
         .optional()
         .describe("Specific entity types to detect. Leave empty to detect all supported entities."),
     },

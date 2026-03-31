@@ -201,6 +201,14 @@ describe("handleDeIdentify", () => {
       expect(mockSetEntities).not.toHaveBeenCalled();
     });
 
+    it("should accept 'all' as a valid entity without error", async () => {
+      const skyflow = createMockSkyflow(mockResponse);
+      const result = await handleDeIdentify("test", ["all"], skyflow as any, false);
+
+      expect(result.isError).toBeUndefined();
+      expect(mockSetEntities).toHaveBeenCalledTimes(1);
+    });
+
     it("should return an error when an invalid entity string is provided", async () => {
       const skyflow = createMockSkyflow(mockResponse);
 
