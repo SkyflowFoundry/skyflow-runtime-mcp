@@ -381,6 +381,11 @@ app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
 // Serve static files from the public directory
 app.use(express.static("public"));
 
+// Health check endpoint for Cloud Run probes
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 // Create rate limiter for anonymous mode
 const anonymousRateLimiter = createAnonymousRateLimiter(
   getAnonymousRateLimitConfig()
@@ -514,7 +519,7 @@ export default app;
 // Only start the server if this file is run directly (not imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = parseInt(process.env.PORT || "3000");
-  app
+  const httpServer = app
     .listen(port, () => {
       console.log(`Skyflow MCP Server running on http://localhost:${port}/mcp`);
     })
@@ -522,4 +527,21 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.error("Server error:", error);
       process.exit(1);
     });
+
+  // Graceful shutdown for Cloud Run SIGTERM
+  function shutdown(signal: string) {
+    console.log(`Received ${signal}, shutting down gracefully...`);
+    httpServer.close(() => {
+      console.log("HTTP server closed");
+      process.exit(0);
+    });
+    // Force exit if graceful shutdown takes too long (within Cloud Run's 10s grace period)
+    setTimeout(() => {
+      console.error("Forced shutdown after timeout");
+      process.exit(1);
+    }, 8000).unref();
+  }
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
