@@ -1,0 +1,71 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: us-central1
+  SERVICE_NAME: pii-mcp
+  REGISTRY: us-central1-docker.pkg.dev
+  REPOSITORY: pii-mcp-repo
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=$IMAGE \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=10 \
+            --concurrency=80 \
+            --timeout=120s \
+            --set-env-vars="NODE_ENV=production,ANON_MODE_RATE_LIMIT_REQUESTS=${{ vars.ANON_MODE_RATE_LIMIT_REQUESTS }},ANON_MODE_RATE_LIMIT_WINDOW_MS=${{ vars.ANON_MODE_RATE_LIMIT_WINDOW_MS }}" \
+            --set-secrets="VAULT_URL=VAULT_URL:latest,VAULT_ID=VAULT_ID:latest,WORKSPACE_ID=WORKSPACE_ID:latest,ACCOUNT_ID=ACCOUNT_ID:latest,ANON_MODE_API_KEY=ANON_MODE_API_KEY:latest,ANON_MODE_VAULT_ID=ANON_MODE_VAULT_ID:latest,ANON_MODE_VAULT_URL=ANON_MODE_VAULT_URL:latest" \
+            --startup-probe-path=/health \
+            --startup-probe-initial-delay=0s \
+            --startup-probe-period=3s \
+            --startup-probe-failure-threshold=5 \
+            --liveness-probe-path=/health \
+            --liveness-probe-period=15s
