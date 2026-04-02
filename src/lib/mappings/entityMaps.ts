@@ -100,6 +100,12 @@ export const TRANSCRIPTION_MAP: Record<string, DetectOutputTranscription> = {
 };
 
 /**
+ * Tuple of all valid entity type strings, derived from ENTITY_MAP.
+ * Use this with z.enum() in tool schemas to keep the list in sync automatically.
+ */
+export const ENTITY_KEYS = Object.keys(ENTITY_MAP) as [string, ...string[]];
+
+/**
  * Check if an entity type is valid
  */
 export function isValidEntity(entity: string): boolean {
@@ -111,11 +117,10 @@ export function isValidEntity(entity: string): boolean {
  * @throws Error if the entity type is invalid
  */
 export function getEntityEnum(entity: string): DetectEntities {
-  const entityEnum = ENTITY_MAP[entity];
-  if (!entityEnum) {
+  if (!(entity in ENTITY_MAP)) {
     throw new Error(`Invalid entity type: ${entity}`);
   }
-  return entityEnum;
+  return ENTITY_MAP[entity];
 }
 
 /**

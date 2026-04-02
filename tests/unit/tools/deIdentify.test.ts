@@ -5,6 +5,7 @@ import type { DeIdentifyOutput, DeIdentifyErrorOutput } from "../../../src/lib/t
 // Mock the skyflow-node SDK
 const mockSetDefault = vi.fn();
 const mockSetTokenFormat = vi.fn();
+const mockSetEntities = vi.fn();
 const mockDeidentifyText = vi.fn();
 
 vi.mock("skyflow-node", () => {
@@ -22,7 +23,13 @@ vi.mock("skyflow-node", () => {
       VAULT_TOKEN: "VAULT_TOKEN",
       ENTITY_UNIQUE_COUNTER: "ENTITY_UNIQUE_COUNTER",
     },
-    DeidentifyTextOptions: vi.fn(function (this: any) { this.setTokenFormat = mockSetTokenFormat; }),
+    DetectEntities: new Proxy({}, { get: (_t, prop) => prop }),
+    MaskingMethod: new Proxy({}, { get: (_t, prop) => prop }),
+    DetectOutputTranscription: new Proxy({}, { get: (_t, prop) => prop }),
+    DeidentifyTextOptions: vi.fn(function (this: any) {
+      this.setTokenFormat = mockSetTokenFormat;
+      this.setEntities = mockSetEntities;
+    }),
     DeidentifyTextRequest: vi.fn(function (this: any, input: string) { this.input = input; }),
     SkyflowError: MockSkyflowError,
   };
@@ -72,7 +79,7 @@ describe("handleDeIdentify", () => {
 
     it("should return correct output shape with all fields", async () => {
       const skyflow = createMockSkyflow(mockResponse);
-      const result = await handleDeIdentify("My email is john@example.com", skyflow as any, false);
+      const result = await handleDeIdentify("My email is john@example.com", undefined, skyflow as any, false);
       const output = result.output as DeIdentifyOutput;
 
       expect(result.isError).toBeUndefined();
@@ -88,7 +95,7 @@ describe("handleDeIdentify", () => {
     it("should pass through inputText from the original input", async () => {
       const skyflow = createMockSkyflow(mockResponse);
       const input = "My email is john@example.com";
-      const result = await handleDeIdentify(input, skyflow as any, false);
+      const result = await handleDeIdentify(input, undefined, skyflow as any, false);
       const output = result.output as DeIdentifyOutput;
 
       expect(output.inputText).toBe(input);
@@ -96,7 +103,7 @@ describe("handleDeIdentify", () => {
 
     it("should expose entity metadata with token, value, entity, positions, and scores", async () => {
       const skyflow = createMockSkyflow(mockResponse);
-      const result = await handleDeIdentify("My email is john@example.com", skyflow as any, false);
+      const result = await handleDeIdentify("My email is john@example.com", undefined, skyflow as any, false);
       const output = result.output as DeIdentifyOutput;
 
       expect(output.entities).toHaveLength(1);
@@ -111,7 +118,7 @@ describe("handleDeIdentify", () => {
 
     it("should use VAULT_TOKEN format in authenticated mode", async () => {
       const skyflow = createMockSkyflow(mockResponse);
-      await handleDeIdentify("test", skyflow as any, false);
+      await handleDeIdentify("test", undefined, skyflow as any, false);
 
       expect(mockSetDefault).toHaveBeenCalledWith("VAULT_TOKEN");
     });
@@ -123,7 +130,7 @@ describe("handleDeIdentify", () => {
         charCount: 11,
         entities: [],
       });
-      const result = await handleDeIdentify("Hello world", skyflow as any, false);
+      const result = await handleDeIdentify("Hello world", undefined, skyflow as any, false);
       const output = result.output as DeIdentifyOutput;
 
       expect(output.entities).toEqual([]);
@@ -145,7 +152,7 @@ describe("handleDeIdentify", () => {
 
     it("should include anonymousMode flag and note", async () => {
       const skyflow = createMockSkyflow(mockResponse);
-      const result = await handleDeIdentify("My email is john@example.com", skyflow as any, true);
+      const result = await handleDeIdentify("My email is john@example.com", undefined, skyflow as any, true);
       const output = result.output as DeIdentifyOutput;
 
       expect(output.anonymousMode).toBe(true);
@@ -154,9 +161,63 @@ describe("handleDeIdentify", () => {
 
     it("should use ENTITY_UNIQUE_COUNTER format in anonymous mode", async () => {
       const skyflow = createMockSkyflow(mockResponse);
-      await handleDeIdentify("test", skyflow as any, true);
+      await handleDeIdentify("test", undefined, skyflow as any, true);
 
       expect(mockSetDefault).toHaveBeenCalledWith("ENTITY_UNIQUE_COUNTER");
+    });
+  });
+
+  describe("entities parameter", () => {
+    const mockResponse = {
+      processedText: "My email is [EMAIL_ADDRESS_abc123] and SSN is [SSN_xyz789]",
+      wordCount: 9,
+      charCount: 58,
+      entities: [
+        { token: "[EMAIL_ADDRESS_abc123]", entity: "email_address" },
+        { token: "[SSN_xyz789]", entity: "ssn" },
+      ],
+    };
+
+    it("should call setEntities with mapped enum values when entities provided", async () => {
+      const skyflow = createMockSkyflow(mockResponse);
+      await handleDeIdentify("test", ["email_address", "ssn"], skyflow as any, false);
+
+      expect(mockSetEntities).toHaveBeenCalledTimes(1);
+      const called = mockSetEntities.mock.calls[0][0];
+      expect(called).toHaveLength(2);
+    });
+
+    it("should not call setEntities when entities is undefined", async () => {
+      const skyflow = createMockSkyflow(mockResponse);
+      await handleDeIdentify("test", undefined, skyflow as any, false);
+
+      expect(mockSetEntities).not.toHaveBeenCalled();
+    });
+
+    it("should not call setEntities when entities is an empty array", async () => {
+      const skyflow = createMockSkyflow(mockResponse);
+      await handleDeIdentify("test", [], skyflow as any, false);
+
+      expect(mockSetEntities).not.toHaveBeenCalled();
+    });
+
+    it("should accept 'all' as a valid entity without error", async () => {
+      const skyflow = createMockSkyflow(mockResponse);
+      const result = await handleDeIdentify("test", ["all"], skyflow as any, false);
+
+      expect(result.isError).toBeUndefined();
+      expect(mockSetEntities).toHaveBeenCalledTimes(1);
+    });
+
+    it("should return an error when an invalid entity string is provided", async () => {
+      const skyflow = createMockSkyflow(mockResponse);
+
+      const result = await handleDeIdentify("test", ["not_a_real_entity"], skyflow as any, false);
+      const output = result.output as DeIdentifyErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.error).toBe(true);
+      expect(output.message).toContain("Invalid entity type: not_a_real_entity");
     });
   });
 
@@ -172,7 +233,7 @@ describe("handleDeIdentify", () => {
         })),
       };
 
-      const result = await handleDeIdentify("test input", skyflow as any, false);
+      const result = await handleDeIdentify("test input", undefined, skyflow as any, false);
       const output = result.output as DeIdentifyErrorOutput;
 
       expect(result.isError).toBe(true);
@@ -191,7 +252,7 @@ describe("handleDeIdentify", () => {
         })),
       };
 
-      const result = await handleDeIdentify("test input", skyflow as any, false);
+      const result = await handleDeIdentify("test input", undefined, skyflow as any, false);
       const output = result.output as DeIdentifyErrorOutput;
 
       expect(result.isError).toBe(true);
@@ -208,7 +269,7 @@ describe("handleDeIdentify", () => {
         })),
       };
 
-      const result = await handleDeIdentify("test input", skyflow as any, false);
+      const result = await handleDeIdentify("test input", undefined, skyflow as any, false);
       const output = result.output as DeIdentifyErrorOutput;
 
       expect(result.isError).toBe(true);
