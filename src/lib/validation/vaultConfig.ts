@@ -2,8 +2,6 @@ export interface VaultConfig {
   vaultId: string;
   vaultUrl: string;
   clusterId: string;
-  accountId?: string;
-  workspaceId?: string;
 }
 
 export interface ValidationResult {
@@ -80,8 +78,6 @@ export function extractClusterId(vaultUrl: string): string | null {
 export function validateVaultConfig(params: {
   vaultId?: string;
   vaultUrl?: string;
-  accountId?: string;
-  workspaceId?: string;
 }): ValidationResult {
   if (!params.vaultId) {
     return {
@@ -114,8 +110,6 @@ export function validateVaultConfig(params: {
       vaultId: params.vaultId,
       vaultUrl: params.vaultUrl,
       clusterId,
-      accountId: params.accountId,
-      workspaceId: params.workspaceId,
     },
   };
 }

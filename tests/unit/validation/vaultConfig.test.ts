@@ -60,8 +60,6 @@ describe("Vault Configuration Validation", () => {
         const result = validateVaultConfig({
           vaultId: "vault123",
           vaultUrl: "https://abc123.vault.skyflowapis.com",
-          accountId: "acc456",
-          workspaceId: "ws789",
         });
 
         expect(result.isValid).toBe(true);
@@ -70,8 +68,6 @@ describe("Vault Configuration Validation", () => {
           vaultId: "vault123",
           vaultUrl: "https://abc123.vault.skyflowapis.com",
           clusterId: "abc123",
-          accountId: "acc456",
-          workspaceId: "ws789",
         });
       });
 
@@ -87,8 +83,6 @@ describe("Vault Configuration Validation", () => {
           vaultId: "vault123",
           vaultUrl: "https://abc123.vault.skyflowapis.com",
           clusterId: "abc123",
-          accountId: undefined,
-          workspaceId: undefined,
         });
       });
 
@@ -104,8 +98,6 @@ describe("Vault Configuration Validation", () => {
           vaultId: "vault123",
           vaultUrl: "abc123.vault.skyflowapis.com",
           clusterId: "abc123",
-          accountId: undefined,
-          workspaceId: undefined,
         });
       });
     });
@@ -199,19 +191,6 @@ describe("Vault Configuration Validation", () => {
 
         expect(result.isValid).toBe(false);
         expect(result.error).toContain("vaultId is required");
-      });
-
-      it("should preserve optional fields when provided", () => {
-        const result = validateVaultConfig({
-          vaultId: "vault123",
-          vaultUrl: "https://abc123.vault.skyflowapis.com",
-          accountId: "account",
-          workspaceId: "workspace",
-        });
-
-        expect(result.isValid).toBe(true);
-        expect(result.config?.accountId).toBe("account");
-        expect(result.config?.workspaceId).toBe("workspace");
       });
     });
   });
