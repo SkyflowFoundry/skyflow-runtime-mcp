@@ -52,7 +52,7 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 
 **Express HTTP Server** (`src/server.ts`)
 - Serves a single `/mcp` endpoint that handles all MCP protocol requests
-- Accepts query parameters: `accountId`, `vaultId`, `vaultUrl`, `workspaceId`, `apiKey` (optional)
+- Accepts query parameters: `vaultId`, `vaultUrl`, `apiKey` (optional)
 - Uses credentials extraction middleware to validate either Authorization header or apiKey query parameter
 - Configured with 5MB JSON payload limit to support base64-encoded files
 
@@ -130,13 +130,12 @@ This ensures type safety and provides clear error messages for invalid inputs.
 Optional fallback variables in `.env.local`:
 - `VAULT_ID`: Your Skyflow vault identifier (can be overridden via query parameter)
 - `VAULT_URL`: Full vault URL (e.g., `https://ebfc9bee4242.vault.skyflowapis.com`) (can be overridden via query parameter)
-- `WORKSPACE_ID`: Your Skyflow workspace identifier (can be overridden via query parameter)
-- `ACCOUNT_ID`: Your Skyflow account identifier (can be overridden via query parameter)
 - `PORT`: Server port (default: 3000)
 
 **Removed variables** (no longer used):
 - `SKYFLOW_API_KEY`: No longer needed - credentials are passed from client
 - `REQUIRED_BEARER_TOKEN`: No longer needed - all valid credentials are accepted and forwarded to Skyflow
+- `ACCOUNT_ID` / `WORKSPACE_ID`: Never consumed by Skyflow SDK - removed
 
 The server extracts `clusterId` from `vaultUrl` (query parameter or env var) using the pattern: `https://([^.]+).vault`
 
@@ -144,7 +143,7 @@ The server extracts `clusterId` from `vaultUrl` (query parameter or env var) usi
 
 Primary method (bearer token via header):
 ```
-https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}
+https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}
 ```
 With header:
 ```
@@ -153,7 +152,7 @@ Authorization: Bearer {your_skyflow_bearer_token}
 
 Fallback method (API key via query parameter):
 ```
-https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&accountId={account_id}&workspaceId={workspace_id}&apiKey={your_skyflow_api_key}
+https://your-server.com/mcp?vaultId={vault_id}&vaultUrl={vault_url}&apiKey={your_skyflow_api_key}
 ```
 
 ## Anonymous Mode

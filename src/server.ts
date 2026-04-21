@@ -234,16 +234,10 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
     vaultUrl = (req.query.vaultUrl as string) || process.env.VAULT_URL;
   }
 
-  const accountId = (req.query.accountId as string) || process.env.ACCOUNT_ID;
-  const workspaceId =
-    (req.query.workspaceId as string) || process.env.WORKSPACE_ID;
-
   // Validate vault configuration using extracted validation function
   const validation = validateVaultConfig({
     vaultId,
     vaultUrl,
-    accountId,
-    workspaceId,
   });
 
   if (!validation.isValid) {

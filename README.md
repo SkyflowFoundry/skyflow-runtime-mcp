@@ -1,46 +1,17 @@
-# Skyflow PII MCP
+# Skyflow Runtime MCP
 
-A streamable HTTP MCP (Model Context Protocol) server built with TypeScript, Express, and the official MCP SDK.
-
-## Overview
+A remote MCP server for connecting to a Skyflow Vault for sensitive PII data detection,  de-identification, and tokenization as well as selective policy-driven re-identification of sensitive data elements. Give your agent tools to find and remove PII to sanitize text and ensure data privacy and security.
 
 > [!WARNING]  
-> This is an experimental project in development. This project is not supported and offered under an MIT license.
+> This is an experimental project in development. This project is not supported and is offered under an MIT license.
 
-This server demonstrates how to build a remote MCP server using the Streamable HTTP transport. It exposes tools and resources that can be accessed by MCP clients like Claude Desktop.
-
-## Try it out online
-
-This remote MCP server is hosted at `https://pii-mcp.dev/mcp`. You can connect using your own Skyflow credentials - see the configuration section below for details.
-
-### Integration with Claude Desktop
-
-To use this MCP server with Claude Desktop, add the following configuration to your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "sky": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://pii-mcp.dev/mcp"],
-      "headers": {
-        "Authorization": "Bearer {mcp token here}"
-      }
-    }
-  }
-}
-```
-
-### Table of contents
-
-- [Skyflow PII MCP](#skyflow-pii-mcp)
-  - [Overview](#overview)
+- [Skyflow Runtime MCP](#skyflow-runtime-mcp)
   - [Try it out online](#try-it-out-online)
-    - [Integration with Claude Desktop](#integration-with-claude-desktop)
-    - [Table of contents](#table-of-contents)
-    - [Features](#features)
-    - [Configuration File Locations](#configuration-file-locations)
-  - [Architecture](#architecture)
+  - [Connecting in Authenticated Mode](#connecting-in-authenticated-mode)
+    - [Connection Contract](#connection-contract)
+    - [Minimal Example (curl)](#minimal-example-curl)
+    - [Client Configuration Checklist](#client-configuration-checklist)
+    - [Self-Hosted Fallbacks](#self-hosted-fallbacks)
   - [Installation](#installation)
   - [Development](#development)
     - [Quick Start](#quick-start)
@@ -48,41 +19,81 @@ To use this MCP server with Claude Desktop, add the following configuration to y
     - [Manual Setup (Alternative)](#manual-setup-alternative)
     - [Understanding the Ports](#understanding-the-ports)
     - [Environment Variables](#environment-variables)
-    - [Dependencies](#dependencies)
+  - [Anonymous Mode (Try Before You Buy)](#anonymous-mode-try-before-you-buy)
+    - [Quick Start (Anonymous)](#quick-start-anonymous)
+    - [Limitations in Anonymous Mode](#limitations-in-anonymous-mode)
+    - [Claude Desktop (Anonymous)](#claude-desktop-anonymous)
+    - [Server Configuration for Anonymous Mode](#server-configuration-for-anonymous-mode)
+  - [Testing](#testing)
+    - [List Available Tools](#list-available-tools)
+    - [Call the De-identify Tool](#call-the-de-identify-tool)
+    - [Call the Re-identify Tool](#call-the-re-identify-tool)
+  - [Integration with Claude Desktop](#integration-with-claude-desktop)
+    - [Local Development](#local-development)
+    - [Remote Connection (Recommended)](#remote-connection-recommended)
+    - [Configuration File Locations](#configuration-file-locations)
+  - [Architecture](#architecture)
+  - [Dependencies](#dependencies)
   - [Learn More](#learn-more)
 
+## Try it out online
 
-### Features
+This remote MCP server is hosted at `https://pii-mcp.dev/mcp`. Connect using your own Skyflow credentials — see [Connecting in Authenticated Mode](#connecting-in-authenticated-mode) for the contract, or [Anonymous Mode](#anonymous-mode-try-before-you-buy) to try it without credentials.
 
-- **Tools**:
-  - `de-identify`: Skyflow de-identification tool for detecting and redacting sensitive information (PII, PHI, etc.) in text
-  - `re-identify`: Reverses de-identification by restoring original sensitive data from tokens
-  - `de-identify_file`: Processes files (images, PDFs, audio, documents) to detect and redact sensitive information
-- **Authentication**: Supports both JWT bearer tokens and API keys via `Authorization` header (auto-detected)
-- **Multi-tenant**: Each request can specify different vault configurations via query parameters
-- **Transport**: Streamable HTTP with JSON response support
-- **Port**: Configurable via `PORT` environment variable (defaults to 3000)
+For a concrete client example, see [Integration with Claude Desktop](#integration-with-claude-desktop).
 
-**Note**: Make sure the server is running before starting Claude Desktop.
+## Connecting in Authenticated Mode
 
-### Configuration File Locations
+Authenticated mode forwards your own Skyflow credentials to your vault. Any MCP client that supports Streamable HTTP can connect — the server has no client-specific logic.
 
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+### Connection Contract
 
-After updating the config:
+**Endpoint**
 
-1. Save the file
-2. Restart Claude Desktop completely (quit and reopen)
-3. The `add` and `de-identify` tools should now be available in Claude Desktop
+```text
+POST https://pii-mcp.dev/mcp?vaultId=<VAULT_ID>&vaultUrl=<VAULT_URL>
+```
 
-## Architecture
+**Required query parameters**
 
-- **Express Server**: Handles HTTP requests on the `/mcp` endpoint
-- **MCP Server**: Registers tools and resources using the official SDK
-- **Streamable HTTP Transport**: Creates a new transport per request to prevent ID collisions
-- **Session Management**: Each request gets its own isolated transport instance
+| Param | Value | Notes |
+|-------|-------|-------|
+| `vaultId` | Your Skyflow vault ID | Found in Skyflow Studio → Vault details. |
+| `vaultUrl` | Your vault's base URL | e.g. `https://ebfc9bee4242.vault.skyflowapis.com`. URL-encode when embedding in a query string: `https%3A%2F%2Febfc9bee4242.vault.skyflowapis.com`. `clusterId` is extracted from this automatically. |
+
+**Required credential** — pick one:
+
+| Method | Where | Format |
+|--------|-------|--------|
+| Bearer token (preferred) | `Authorization: Bearer <jwt>` header | Skyflow JWT (3 dot-separated base64url segments). Auto-detected. |
+| API key (header) | `Authorization: Bearer <api-key>` header | Any non-JWT value in the `Authorization` header is treated as an API key. |
+| API key (query) | `?apiKey=<api-key>` query parameter | Fallback for clients that can't set headers. Ignored if `Authorization` header is present. |
+
+Credentials are forwarded to Skyflow as-is. The server does not store or log them; Skyflow's API validates them at call time.
+
+### Minimal Example (curl)
+
+```bash
+curl -X POST "https://pii-mcp.dev/mcp?vaultId=$VAULT_ID&vaultUrl=$VAULT_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $SKYFLOW_TOKEN" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+### Client Configuration Checklist
+
+Any MCP client needs to:
+
+1. Point at `/mcp` with `vaultId` + `vaultUrl` appended as query parameters.
+2. Send `Authorization: Bearer <credential>` on every request (or append `&apiKey=<key>` if the client can't inject headers).
+3. Send `Content-Type: application/json` and `Accept: application/json, text/event-stream`.
+
+See [Integration with Claude Desktop](#integration-with-claude-desktop) for one concrete client. The same pattern applies to any Streamable HTTP MCP client (Cursor, MCP Inspector, custom SDK clients).
+
+### Self-Hosted Fallbacks
+
+When self-hosting, `VAULT_ID` and `VAULT_URL` can be set as environment variables in `.env.local` — query parameters override them per request. Useful for pinning a single vault without rewriting client URLs. See [Environment Variables](#environment-variables).
 
 ## Installation
 
@@ -140,20 +151,15 @@ If you prefer to run the inspector and server in separate terminals:
 
 ### Environment Variables
 
-**Authentication Model**: This server supports multiple authentication methods:
-- **JWT bearer token**: Pass via `Authorization: Bearer <jwt>` header - auto-detected by JWT format
-- **API key via header**: Pass via `Authorization: Bearer <api-key>` header - non-JWT values are treated as API keys
-- **API key via query param**: Pass via `?apiKey=<api-key>` query parameter (fallback)
+For authentication methods, see [Connecting in Authenticated Mode](#connecting-in-authenticated-mode).
 
 Create a `.env.local` file with optional fallback values:
 
 - `VAULT_ID`: Your Skyflow vault ID (optional - can be provided via query parameter)
 - `VAULT_URL`: Your Skyflow vault URL (optional - can be provided via query parameter, e.g., `https://ebfc9bee4242.vault.skyflowapis.com`)
-- `WORKSPACE_ID`: Your Skyflow workspace ID (optional - can be provided via query parameter)
-- `ACCOUNT_ID`: Your Skyflow account ID (optional - can be provided via query parameter)
 - `PORT`: Server port (default: 3000)
 
-**Note**: `SKYFLOW_API_KEY` and `REQUIRED_BEARER_TOKEN` are no longer used. The bearer token is now passed through from the client to Skyflow.
+**Note**: `SKYFLOW_API_KEY`, `REQUIRED_BEARER_TOKEN`, `ACCOUNT_ID`, and `WORKSPACE_ID` are no longer used. The bearer token is passed through from the client to Skyflow; account/workspace IDs were never consumed by the SDK.
 
 ## Anonymous Mode (Try Before You Buy)
 
@@ -171,7 +177,7 @@ curl -X POST "https://pii-mcp.dev/mcp" \
 
 ### Limitations in Anonymous Mode
 
-- **Only `de-identify` tool available** - `re-identify` and `de-identify_file` return helpful errors
+- **Only `de-identify` tool available** - `re-identify` returns a helpful error
 - **Tokens use entity counters** - e.g., `[EMAIL_ADDRESS_1]`, `[SSN_2]` instead of vault tokens
 - **Data is NOT persisted** - tokens cannot be re-identified later
 - **Rate limited** - 10 requests per minute per IP (configurable by server operator)
@@ -205,7 +211,7 @@ Server operators can enable anonymous mode by setting these environment variable
 
 ## Testing
 
-**Note**: All requests require authentication and configuration. Replace placeholders with your actual values:
+The examples below use curl. See [Connecting in Authenticated Mode](#connecting-in-authenticated-mode) for the full contract. Placeholders used:
 
 - `{your_bearer_token}`: Your Skyflow JWT bearer token OR API key (auto-detected based on format)
 - `{vault_id}`: Your Skyflow vault ID
@@ -251,7 +257,7 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 
 ## Integration with Claude Desktop
 
-To use this MCP server with Claude Desktop, add the following configuration to your `claude_desktop_config.json`:
+Claude Desktop is one concrete client for the [Connection Contract](#connection-contract). It uses `mcp-remote` as a bridge to the Streamable HTTP endpoint. Add the following to your `claude_desktop_config.json`:
 
 ### Local Development
 
@@ -280,7 +286,7 @@ For connecting to the hosted server or any remote instance with dynamic configur
   "mcpServers": {
     "skyflow-pii": {
       "command": "npx",
-      "args": ["mcp-remote", "https://pii-mcp.dev/mcp?accountId={account_id}&vaultId={vault_id}&vaultUrl={vault_url}&workspaceId={workspace_id}"],
+      "args": ["mcp-remote", "https://pii-mcp.dev/mcp?vaultId={vault_id}&vaultUrl={vault_url}"],
       "headers": {
         "Authorization": "Bearer {your_skyflow_bearer_token}"
       }
@@ -291,7 +297,7 @@ For connecting to the hosted server or any remote instance with dynamic configur
 
 **Important Notes**:
 - Replace `{your_skyflow_bearer_token}` with your actual Skyflow bearer token
-- Replace `{account_id}`, `{vault_id}`, `{vault_url}`, and `{workspace_id}` with your Skyflow configuration values
+- Replace `{vault_id}` and `{vault_url}` with your Skyflow configuration values
 - The `vaultUrl` should be URL-encoded (e.g., `https%3A%2F%2Febfc9bee4242.vault.skyflowapis.com`)
 - Make sure the server is running before starting Claude Desktop (for local development)
 
@@ -305,7 +311,7 @@ After updating the config:
 
 1. Save the file
 2. Restart Claude Desktop completely (quit and reopen)
-3. The `de-identify`, `re-identify`, and `de-identify_file` tools should now be available in Claude Desktop
+3. The `de-identify` and `re-identify` tools should now be available in Claude Desktop
 
 ## Architecture
 
