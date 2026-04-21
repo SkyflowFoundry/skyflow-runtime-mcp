@@ -12,9 +12,6 @@ A remote MCP server for connecting to a Skyflow Vault for sensitive PII data det
     - [Minimal Example (curl)](#minimal-example-curl)
     - [Client Configuration Checklist](#client-configuration-checklist)
     - [Self-Hosted Fallbacks](#self-hosted-fallbacks)
-    - [Features](#features)
-    - [Configuration File Locations](#configuration-file-locations)
-  - [Architecture](#architecture)
   - [Installation](#installation)
   - [Development](#development)
     - [Quick Start](#quick-start)
@@ -34,8 +31,8 @@ A remote MCP server for connecting to a Skyflow Vault for sensitive PII data det
   - [Integration with Claude Desktop](#integration-with-claude-desktop)
     - [Local Development](#local-development)
     - [Remote Connection (Recommended)](#remote-connection-recommended)
-    - [Configuration File Locations](#configuration-file-locations-1)
-  - [Architecture](#architecture-1)
+    - [Configuration File Locations](#configuration-file-locations)
+  - [Architecture](#architecture)
   - [Dependencies](#dependencies)
   - [Learn More](#learn-more)
 
@@ -97,37 +94,6 @@ See [Integration with Claude Desktop](#integration-with-claude-desktop) for one 
 ### Self-Hosted Fallbacks
 
 When self-hosting, `VAULT_ID` and `VAULT_URL` can be set as environment variables in `.env.local` — query parameters override them per request. Useful for pinning a single vault without rewriting client URLs. See [Environment Variables](#environment-variables).
-
-### Features
-
-- **Tools**:
-  - `de-identify`: Skyflow de-identification tool for detecting and redacting sensitive information (PII, PHI, etc.) in text
-  - `re-identify`: Reverses de-identification by restoring original sensitive data from tokens
-- **Authentication**: Supports both JWT bearer tokens and API keys via `Authorization` header (auto-detected)
-- **Multi-tenant**: Each request can specify different vault configurations via query parameters
-- **Transport**: Streamable HTTP with JSON response support
-- **Port**: Configurable via `PORT` environment variable (defaults to 3000)
-
-**Note**: Make sure the server is running before starting Claude Desktop.
-
-### Configuration File Locations
-
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
-
-After updating the config:
-
-1. Save the file
-2. Restart Claude Desktop completely (quit and reopen)
-3. The `add` and `de-identify` tools should now be available in Claude Desktop
-
-## Architecture
-
-- **Express Server**: Handles HTTP requests on the `/mcp` endpoint
-- **MCP Server**: Registers tools and resources using the official SDK
-- **Streamable HTTP Transport**: Creates a new transport per request to prevent ID collisions
-- **Session Management**: Each request gets its own isolated transport instance
 
 ## Installation
 
