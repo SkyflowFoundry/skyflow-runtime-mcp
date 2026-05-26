@@ -18,6 +18,7 @@ import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaul
 import { ENTITY_KEYS } from "./lib/mappings/entityMaps.js";
 import { handleDeIdentify } from "./lib/tools/deIdentify.js";
 import { handleReIdentify } from "./lib/tools/reIdentify.js";
+import { handleHello } from "./lib/tools/hello.js";
 import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
@@ -59,10 +60,20 @@ function isAnonymousMode(): boolean {
   return context.isAnonymousMode;
 }
 
+function getCurrentVaultId(): string {
+  const context = requestContextStorage.getStore();
+  if (!context) {
+    throw new Error("No request context available");
+  }
+  return context.vaultId;
+}
+
 // Create an MCP server
+const SERVER_NAME = "Skyflow Runtime MCP Server";
+const SERVER_VERSION = "0.4.0";
 const server = new McpServer({
-  name: "Skyflow Runtime MCP Server",
-  version: "0.4.0",
+  name: SERVER_NAME,
+  version: SERVER_VERSION,
 });
 
 // MCP Apps: Resource URIs
@@ -164,6 +175,43 @@ registerAppTool(
       content: [{ type: "text", text: JSON.stringify(result.output) }],
       structuredContent: toStructuredContent(result.output),
       ...(result.isError && { isError: true }),
+    };
+  }
+);
+
+/**
+ * Hello / self tool
+ * Echoes back basic metadata about the server and the caller's connection.
+ * Useful as a health check and to confirm credentials/vault wiring.
+ */
+server.registerTool(
+  "hello",
+  {
+    title: "Hello / Self",
+    description:
+      "Health check / self endpoint. Returns server name, version, the vault ID this connection is using, whether the session is in anonymous mode, and a timestamp. Pass an optional name to get a personalized greeting.",
+    inputSchema: {
+      name: z.string().optional().describe("Optional name to include in the greeting"),
+    },
+    outputSchema: {
+      message: z.string(),
+      serverName: z.string(),
+      serverVersion: z.string(),
+      vaultId: z.string(),
+      anonymousMode: z.boolean(),
+      timestamp: z.string().describe("ISO-8601 timestamp when the response was generated"),
+    },
+  },
+  async ({ name }) => {
+    const result = await handleHello(name, {
+      serverName: SERVER_NAME,
+      serverVersion: SERVER_VERSION,
+      vaultId: getCurrentVaultId(),
+      anonymousMode: isAnonymousMode(),
+    });
+    return {
+      content: [{ type: "text", text: JSON.stringify(result.output) }],
+      structuredContent: toStructuredContent(result.output),
     };
   }
 );
