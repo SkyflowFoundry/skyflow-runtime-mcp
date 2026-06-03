@@ -46,13 +46,23 @@ build time) and serves each string as the resource body. The
 
 ## SDK building blocks
 
-Each `main.ts` follows the same shape, pulling from
-`@modelcontextprotocol/ext-apps`:
+The MCP Apps SDK (`@modelcontextprotocol/ext-apps`) is split across the
+per-tool `main.ts` files and the shared `ui/shared/theme.ts` helper.
+Each `main.ts` only imports the two symbols it actually needs — the
+host-theming surface is reached indirectly through `setupHostTheming` /
+`applyInitialContext` in `theme.ts`.
+
+Imported by every `main.ts`:
 
 | Symbol | Purpose |
 |--------|---------|
 | `App` | Top-level app instance, holds lifecycle callbacks. Constructed with `{ name, version }`. |
 | `PostMessageTransport` | Default transport — talks to the host frame over `postMessage`. Passed to `app.connect()`. |
+
+Imported by `ui/shared/theme.ts` (not by the per-tool files):
+
+| Symbol | Purpose |
+|--------|---------|
 | `applyDocumentTheme` | Applies the host's light/dark theme to the document. |
 | `applyHostStyleVariables` | Forwards CSS variables (colors, spacing) supplied by the host. |
 | `applyHostFonts` | Loads font-face declarations supplied by the host. |
@@ -65,8 +75,9 @@ Lifecycle hooks each app sets:
   with the input string.
 - `app.ontoolresult(result)` — reads `structuredContent` and renders the
   final view.
-- `app.onhostcontextchanged(ctx)` — re-applies theme/styles/fonts when
-  the host changes context.
+- `app.onhostcontextchanged(ctx)` — registered indirectly by
+  `setupHostTheming(app)` (see `ui/shared/theme.ts`); re-applies
+  theme/styles/fonts when the host changes context.
 - `app.onteardown()` — returns `{}` (no cleanup needed today).
 - `app.connect(new PostMessageTransport())` — opens the channel, then
   the app calls `applyInitialContext` and shows the loading state.

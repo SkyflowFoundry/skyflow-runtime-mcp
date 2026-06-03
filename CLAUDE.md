@@ -69,6 +69,7 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Built with Vite + `vite-plugin-singlefile` → single HTML files in `dist/ui/`
 - Resources registered via `registerAppResource` with `ui://` URIs
 - Hosts that support MCP Apps render the UI inline; text-only hosts get JSON fallback via `content`
+- See `docs/mcp-apps-ui.md` for a developer-oriented walkthrough of the apps, shared components, and how to add a new one.
 
 **Transport Layer - Critical Architecture Detail**
 - Creates a NEW `StreamableHTTPServerTransport` instance **per request**
