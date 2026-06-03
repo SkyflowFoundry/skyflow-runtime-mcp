@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM node:20-slim AS builder
+FROM node:20.19.0-slim AS builder
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 
@@ -18,7 +18,7 @@ COPY tsconfig.json ./
 RUN pnpm build:server
 
 # Stage 2: Production
-FROM node:20-slim AS production
+FROM node:20.19.0-slim AS production
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 

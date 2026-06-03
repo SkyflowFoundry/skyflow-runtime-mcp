@@ -325,7 +325,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // Force exit if graceful shutdown takes too long (within Cloud Run's 10s grace period)
     setTimeout(() => {
       console.error("Forced shutdown after timeout");
-      process.exit(1);
+      process.exit(0);
     }, 8000).unref();
   }
 
