@@ -62,7 +62,7 @@ jobs:
             --concurrency=80 \
             --timeout=120s \
             --set-env-vars="NODE_ENV=production,ANON_MODE_RATE_LIMIT_REQUESTS=${{ vars.ANON_MODE_RATE_LIMIT_REQUESTS }},ANON_MODE_RATE_LIMIT_WINDOW_MS=${{ vars.ANON_MODE_RATE_LIMIT_WINDOW_MS }}" \
-            --set-secrets="VAULT_URL=VAULT_URL:latest,VAULT_ID=VAULT_ID:latest,WORKSPACE_ID=WORKSPACE_ID:latest,ACCOUNT_ID=ACCOUNT_ID:latest,ANON_MODE_API_KEY=ANON_MODE_API_KEY:latest,ANON_MODE_VAULT_ID=ANON_MODE_VAULT_ID:latest,ANON_MODE_VAULT_URL=ANON_MODE_VAULT_URL:latest" \
+            --set-secrets="VAULT_URL=VAULT_URL:latest,VAULT_ID=VAULT_ID:latest,ANON_MODE_API_KEY=ANON_MODE_API_KEY:latest,ANON_MODE_VAULT_ID=ANON_MODE_VAULT_ID:latest,ANON_MODE_VAULT_URL=ANON_MODE_VAULT_URL:latest" \
             --startup-probe-path=/health \
             --startup-probe-initial-delay=0s \
             --startup-probe-period=3s \

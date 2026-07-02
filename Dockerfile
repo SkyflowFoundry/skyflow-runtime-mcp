@@ -1,6 +1,6 @@
 # Stage 1: Build
 FROM node:20.19.0-slim AS builder
-RUN corepack enable && corepack prepare pnpm@10 --activate
+RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 WORKDIR /app
 
 # Install dependencies first (layer cache)
@@ -19,7 +19,7 @@ RUN pnpm build:server
 
 # Stage 2: Production
 FROM node:20.19.0-slim AS production
-RUN corepack enable && corepack prepare pnpm@10 --activate
+RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
