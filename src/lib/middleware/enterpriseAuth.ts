@@ -42,17 +42,23 @@ function unauthorized(
   config: EnterpriseAuthConfig,
   options: { error?: string; description?: string } = {}
 ): void {
-  // INVARIANT: error/description are interpolated into the WWW-Authenticate
-  // header unescaped — callers must pass constants, never request-derived text.
+  // Callers pass constants, but escape defensively anyway so a future
+  // request-derived value cannot break out of the quoted header parameter.
+  const headerParam = (value: string) => value.replace(/["\\\r\n]/g, "");
   const challengeParts: string[] = [];
   if (options.error) {
-    challengeParts.push(`error="${options.error}"`);
+    challengeParts.push(`error="${headerParam(options.error)}"`);
   }
   if (options.description) {
-    challengeParts.push(`error_description="${options.description}"`);
+    challengeParts.push(`error_description="${headerParam(options.description)}"`);
   }
+  // RFC 9728 path-suffixed metadata URL for a resource with a path component
+  // (e.g. .../oauth-protected-resource/mcp). The bare URL is also served.
+  const resourcePath = new URL(config.resource).pathname;
   challengeParts.push(
-    `resource_metadata="${config.issuer}/.well-known/oauth-protected-resource"`
+    `resource_metadata="${config.issuer}/.well-known/oauth-protected-resource${
+      resourcePath === "/" ? "" : resourcePath
+    }"`
   );
   res.set("WWW-Authenticate", `Bearer ${challengeParts.join(", ")}`);
   // Body mirrors the RFC 6749 §5.2 shape used by /token so programmatic
@@ -80,10 +86,16 @@ function resolveSkyflowCredentials(
   const headerValue = Array.isArray(skyflowHeader) ? skyflowHeader[0] : skyflowHeader;
 
   if (headerValue && headerValue.trim().length > 0) {
-    const normalized = headerValue.startsWith("Bearer ")
-      ? headerValue
-      : `Bearer ${headerValue}`;
-    const result = extractCredentials(normalized, undefined);
+    // Accept the credential bare or Bearer-prefixed in any casing (RFC 7235
+    // auth schemes are case-insensitive), tolerating surrounding whitespace.
+    const trimmed = headerValue.trim();
+    const value = /^bearer(\s|$)/i.test(trimmed)
+      ? trimmed.replace(/^bearer\s*/i, "")
+      : trimmed;
+    const result = extractCredentials(
+      value ? `Bearer ${value}` : undefined,
+      undefined
+    );
     if (!result.isPresent || !result.credentials) {
       unauthorized(res, config, {
         error: "invalid_request",

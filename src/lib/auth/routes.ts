@@ -175,10 +175,11 @@ export function createEnterpriseAuthRouter(
     "/.well-known/oauth-authorization-server",
     createAuthServerMetadataHandler(deps)
   );
-  // RFC 9728 allows path-suffixed metadata URLs for resources with a path
-  // component (our resource identifier ends in /mcp), so serve both.
+  // RFC 9728 prescribes path-suffixed metadata URLs for resources with a
+  // path component (e.g. .../oauth-protected-resource/mcp). Serve the bare
+  // URL plus any suffix so custom ENTERPRISE_MCP_RESOURCE paths work too.
   router.get(
-    ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/mcp"],
+    ["/.well-known/oauth-protected-resource", "/.well-known/oauth-protected-resource/*resourcePath"],
     createProtectedResourceMetadataHandler(deps)
   );
   router.post(

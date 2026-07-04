@@ -90,8 +90,9 @@ describe("enterprise auth middleware", () => {
       const { next, captured } = await runMiddleware(enabledEnv(), req);
       expect(next).not.toHaveBeenCalled();
       expect(captured.statusCode).toBe(401);
+      // RFC 9728 path-suffixed metadata URL (resource has a /mcp path)
       expect(captured.headers["www-authenticate"]).toContain(
-        `resource_metadata="${TEST_ISSUER}/.well-known/oauth-protected-resource"`
+        `resource_metadata="${TEST_ISSUER}/.well-known/oauth-protected-resource/mcp"`
       );
       // Body follows the RFC 6749 §5.2 shape for programmatic clients
       expect(captured.jsonBody.error).toBe("unauthorized");
@@ -158,6 +159,30 @@ describe("enterprise auth middleware", () => {
       const { next } = await runMiddleware(enabledEnv(), req);
       expect(next).toHaveBeenCalled();
       expect(req.skyflowCredentials).toEqual({ apiKey: "sky-abc123-def456" }); // gitleaks:allow
+    });
+
+    it("strips a lowercase bearer prefix (RFC 7235 schemes are case-insensitive)", async () => {
+      const req = createMockRequest({
+        headers: {
+          authorization: `Bearer ${await validToken()}`,
+          [SKYFLOW_AUTH_HEADER]: "bearer sky-per-user-key",
+        },
+      });
+      const { next } = await runMiddleware(enabledEnv(), req);
+      expect(next).toHaveBeenCalled();
+      expect(req.skyflowCredentials).toEqual({ apiKey: "sky-per-user-key" });
+    });
+
+    it("tolerates surrounding whitespace around a Bearer-prefixed JWT", async () => {
+      const req = createMockRequest({
+        headers: {
+          authorization: `Bearer ${await validToken()}`,
+          [SKYFLOW_AUTH_HEADER]: `  Bearer  ${SKYFLOW_JWT} `,
+        },
+      });
+      const { next } = await runMiddleware(enabledEnv(), req);
+      expect(next).toHaveBeenCalled();
+      expect(req.skyflowCredentials).toEqual({ token: SKYFLOW_JWT });
     });
 
     it("rejects a malformed X-Skyflow-Authorization header", async () => {

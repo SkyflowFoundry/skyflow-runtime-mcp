@@ -159,7 +159,7 @@ describe("enterprise auth HTTP flow (integration)", () => {
     const res = await callMcp({ jsonrpc: "2.0", method: "tools/list", id: 1 });
     expect(res.status).toBe(401);
     expect(res.wwwAuthenticate).toContain(
-      `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`
+      `resource_metadata="${baseUrl}/.well-known/oauth-protected-resource/mcp"`
     );
     expect(res.body.error).toBe("unauthorized");
   });

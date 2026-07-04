@@ -32,8 +32,8 @@ const ALLOWED_ID_JAG_ALGORITHMS = [
 /** Clock skew tolerance for exp/iat validation, in seconds */
 const CLOCK_TOLERANCE_SECONDS = 60;
 
-/** Timeout for the OIDC discovery request, so a hung IdP can't stall /token */
-const DISCOVERY_TIMEOUT_MS = 5000;
+/** Timeout for IdP HTTP requests (discovery and JWKS), so a hung IdP can't stall /token */
+const IDP_HTTP_TIMEOUT_MS = 5000;
 
 export type OAuthTokenErrorCode =
   | "invalid_request"
@@ -88,7 +88,7 @@ async function discoverJwksUri(idpIssuer: string): Promise<string> {
   let response: Response;
   try {
     response = await fetch(discoveryUrl, {
-      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+      signal: AbortSignal.timeout(IDP_HTTP_TIMEOUT_MS),
     });
   } catch (error) {
     throw new Error(
@@ -138,7 +138,14 @@ export async function getIdpKeyResolver(
 ): Promise<JWTVerifyGetKey> {
   const uri = config.idpJwksUri ?? (await discoverJwksUri(config.idpIssuer));
   if (!cachedRemoteJwks || cachedRemoteJwks.uri !== uri) {
-    cachedRemoteJwks = { uri, resolver: createRemoteJWKSet(new URL(uri)) };
+    cachedRemoteJwks = {
+      uri,
+      // Explicit timeout, matching the discovery fetch (jose defaults to 5s;
+      // pinning it keeps the hardening intent visible and version-proof)
+      resolver: createRemoteJWKSet(new URL(uri), {
+        timeoutDuration: IDP_HTTP_TIMEOUT_MS,
+      }),
+    };
   }
   return cachedRemoteJwks.resolver;
 }
@@ -280,6 +287,9 @@ export async function validateIdJag(
     typeof payload.exp === "number"
       ? payload.exp * 1000 + CLOCK_TOLERANCE_SECONDS * 1000
       : Date.now() + 5 * 60 * 1000;
+  // The jti is deliberately burned here, before token issuance: if issuance
+  // failed transiently the client must fetch a fresh ID-JAG from the IdP,
+  // which is preferable to leaving a validated grant replayable.
   if (isReplayedJti(`${config.idpIssuer}:${jti}`, expiresAtMs)) {
     throw new IdJagValidationError("invalid_grant", "ID-JAG has already been used");
   }
