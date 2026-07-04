@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeEach, beforeAll } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from "vitest";
 import { SignJWT } from "jose";
 import {
   validateIdJag,
   IdJagValidationError,
   resetIdJagCaches,
+  getIdpKeyResolver,
   ID_JAG_TYP,
 } from "../../../src/lib/auth/idJag";
 import {
@@ -158,6 +159,42 @@ describe("validateIdJag()", () => {
       await expectOAuthError(
         validateIdJag("not-a-jwt", testConfig(), idp.keyResolver),
         "invalid_grant"
+      );
+    });
+  });
+
+  describe("JWKS discovery", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function stubDiscovery(jwksUri: unknown) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ jwks_uri: jwksUri }),
+        })
+      );
+    }
+
+    it("accepts an https jwks_uri from the discovery document", async () => {
+      stubDiscovery("https://idp.example.com/oauth2/v1/keys");
+      const resolver = await getIdpKeyResolver(testConfig());
+      expect(typeof resolver).toBe("function");
+    });
+
+    it("rejects a non-https jwks_uri from the discovery document", async () => {
+      stubDiscovery("http://idp.example.com/oauth2/v1/keys");
+      await expect(getIdpKeyResolver(testConfig())).rejects.toThrow(
+        /non-https jwks_uri/
+      );
+    });
+
+    it("rejects a discovery document without a jwks_uri", async () => {
+      stubDiscovery(undefined);
+      await expect(getIdpKeyResolver(testConfig())).rejects.toThrow(
+        /no jwks_uri/
       );
     });
   });

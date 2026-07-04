@@ -107,6 +107,23 @@ async function discoverJwksUri(idpIssuer: string): Promise<string> {
     throw new Error(`IdP discovery document at ${discoveryUrl} has no jwks_uri`);
   }
 
+  // Apply the same scheme policy as configured URLs: keys must come over
+  // https (http only for localhost development), even if the discovery
+  // document says otherwise.
+  let jwksUrl: URL;
+  try {
+    jwksUrl = new URL(metadata.jwks_uri);
+  } catch {
+    throw new Error(`IdP discovery document has an invalid jwks_uri: ${metadata.jwks_uri}`);
+  }
+  const isLocalhost =
+    jwksUrl.hostname === "localhost" || jwksUrl.hostname === "127.0.0.1";
+  if (jwksUrl.protocol !== "https:" && !(jwksUrl.protocol === "http:" && isLocalhost)) {
+    throw new Error(
+      `IdP discovery document has a non-https jwks_uri: ${metadata.jwks_uri}`
+    );
+  }
+
   discoveredJwksUris.set(idpIssuer, metadata.jwks_uri);
   return metadata.jwks_uri;
 }

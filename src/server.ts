@@ -25,6 +25,11 @@ import { createEnterpriseAuthRouter } from "./lib/auth/routes.js";
 import { loadEnterpriseAuthConfig } from "./lib/auth/config.js";
 import type { EnterpriseIdentity } from "./lib/auth/accessTokens.js";
 import {
+  parseGrantedScopes,
+  isToolPermitted,
+  buildScopeDenial,
+} from "./lib/auth/scopes.js";
+import {
   createAnonymousRateLimiter,
   getAnonymousRateLimitConfig,
 } from "./lib/middleware/rateLimiter.js";
@@ -37,6 +42,8 @@ interface RequestContext {
   skyflow: Skyflow;
   vaultId: string;
   isAnonymousMode: boolean;
+  /** Scopes granted by the enterprise access token; undefined = unrestricted */
+  enterpriseScopes?: string[];
 }
 
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();
@@ -61,6 +68,26 @@ function isAnonymousMode(): boolean {
     throw new Error("No request context available");
   }
   return context.isAnonymousMode;
+}
+
+/**
+ * Enforce enterprise token scopes at the tool level. When the current
+ * request's enterprise access token carries a scope claim, each scope names
+ * a permitted tool; tokens without a scope claim (and non-enterprise
+ * requests) are unrestricted. Returns a ready-to-return isError tool result
+ * when the tool is denied, or null when permitted.
+ */
+function scopeDenialFor(toolName: string) {
+  const scopes = requestContextStorage.getStore()?.enterpriseScopes;
+  if (isToolPermitted(toolName, scopes)) {
+    return null;
+  }
+  const output = buildScopeDenial(toolName, scopes!);
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(output) }],
+    structuredContent: toStructuredContent(output),
+    isError: true as const,
+  };
 }
 
 // Create an MCP server
@@ -129,6 +156,8 @@ registerAppTool(
     _meta: { ui: { resourceUri: DE_IDENTIFY_RESOURCE_URI } },
   },
   async ({ inputString, entities }) => {
+    const denial = scopeDenialFor("de-identify");
+    if (denial) return denial;
     const result = await handleDeIdentify(inputString, entities, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
@@ -163,6 +192,8 @@ registerAppTool(
     _meta: { ui: { resourceUri: RE_IDENTIFY_RESOURCE_URI } },
   },
   async ({ inputString }) => {
+    const denial = scopeDenialFor("re-identify");
+    if (denial) return denial;
     const result = await handleReIdentify(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
@@ -173,16 +204,19 @@ registerAppTool(
 );
 
 const app: Express = express();
-app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
-
-// Serve static files from the public directory
-app.use(express.static("public"));
 
 // Enterprise-managed authorization (MCP extension
 // io.modelcontextprotocol/enterprise-managed-authorization): OAuth discovery
 // metadata and the ID-JAG token endpoint. All routes 404 unless
-// ENTERPRISE_AUTH_ENABLED=true.
+// ENTERPRISE_AUTH_ENABLED=true. Mounted BEFORE the 5MB JSON parser so the
+// unauthenticated /token endpoint only ever parses its own small
+// form-urlencoded bodies.
 app.use(createEnterpriseAuthRouter());
+
+app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
+
+// Serve static files from the public directory
+app.use(express.static("public"));
 
 // Surface enterprise auth status/misconfiguration at startup. A misconfigured
 // deployment still fails closed per-request (the middleware returns 500).
@@ -314,6 +348,7 @@ app.post("/mcp", createEnterpriseAuthMiddleware(), authenticateBearer, anonymous
       skyflow: skyflowInstance,
       vaultId: validatedVaultId,
       isAnonymousMode: useAnonymousMode,
+      enterpriseScopes: parseGrantedScopes(req.enterpriseAuth?.scope),
     },
     async () => {
       await server.connect(transport);

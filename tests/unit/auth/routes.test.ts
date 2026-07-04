@@ -4,6 +4,7 @@ import {
   createAuthServerMetadataHandler,
   createProtectedResourceMetadataHandler,
   createTokenHandler,
+  createEnterpriseAuthRouter,
 } from "../../../src/lib/auth/routes";
 import {
   ID_JAG_GRANT_PROFILE,
@@ -123,6 +124,18 @@ describe("protected resource metadata endpoint", () => {
       authorization_servers: [TEST_ISSUER],
       bearer_methods_supported: ["header"],
     });
+  });
+});
+
+describe("createEnterpriseAuthRouter()", () => {
+  it("does not crash at creation on invalid rate-limit env when the feature is disabled", () => {
+    expect(() =>
+      createEnterpriseAuthRouter({
+        env: {
+          ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS: "not-a-number",
+        } as NodeJS.ProcessEnv,
+      })
+    ).not.toThrow();
   });
 });
 

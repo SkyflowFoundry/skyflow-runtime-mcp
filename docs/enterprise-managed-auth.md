@@ -61,6 +61,16 @@ All three return 404 when the feature is disabled. Unauthenticated `/mcp` reques
 
 Misconfiguration fails **closed**: if the feature is enabled but required variables are missing or invalid, `/mcp` returns 500 rather than silently skipping authorization.
 
+## Scope enforcement
+
+Scopes let IdP administrators control *which tools* a user or client may invoke, not just whether they can connect. The IdP grants scopes in the ID-JAG (per admin policy), the `/token` endpoint copies them into the access token, and the server enforces them per tool call:
+
+- **Scope values name tools**: grant `de-identify` and/or `re-identify`.
+- **A token with a `scope` claim** may only invoke the named tools; other tools return an `insufficient_scope` error result.
+- **A token without a `scope` claim** is unrestricted — access is gated at the connection level only.
+
+For example, an Okta policy granting the `de-identify` scope to the "support" group lets those users redact text but never restore original PII, while the "compliance" group gets both scopes.
+
 ## Skyflow vault credentials under enterprise auth
 
 The `Authorization` header now carries the enterprise access token, so Skyflow vault credentials are resolved separately, in order of precedence:
@@ -143,5 +153,5 @@ curl -X POST https://mcp.example.com/mcp \
 - **Replay detection** for ID-JAG `jti` values is in-memory and therefore best-effort on serverless/multi-instance deployments; ID-JAGs are short-lived (typically 5 minutes), which bounds the window. Use a shared store if your threat model requires strict single-use.
 - **Token endpoint hardening**: `/token` is unauthenticated by design (clients present ID-JAGs), so it is rate-limited per client IP (`ENTERPRISE_TOKEN_RATE_LIMIT_*`), and the OIDC discovery request to the IdP carries a 5-second timeout so a hung IdP cannot stall requests.
 - **`resource` claim**: an ID-JAG without a `resource` claim is accepted — the extension makes the token-exchange `resource` parameter optional and only constrains the claim "if present". The `aud` check still binds every grant to this authorization server, which serves exactly one resource.
-- **Signing key hygiene**: `ENTERPRISE_AUTH_SIGNING_KEY` is a bearer-token-minting secret. Store it in your platform's secret manager, rotate it periodically (rotation invalidates outstanding access tokens, forcing a silent re-exchange), and never commit it.
+- **Signing key hygiene**: `ENTERPRISE_AUTH_SIGNING_KEY` is a bearer-token-minting secret. It must be a high-entropy random value — the server enforces a minimum length, but length alone is not enough (a long dictionary phrase is forgeable). Generate it with `openssl rand -base64 32`, store it in your platform's secret manager, rotate it periodically (rotation invalidates outstanding access tokens, forcing a silent re-exchange), and never commit it.
 - The enterprise identity (`sub`, `email`, `scope`, `client_id`) of a verified request is available to request handling as `req.enterpriseAuth`, with the `sub` claim as the stable identifier for account linking per the spec.

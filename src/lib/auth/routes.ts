@@ -181,10 +181,51 @@ export function createEnterpriseAuthRouter(
   );
   router.post(
     "/token",
-    createTokenEndpointRateLimiter(getTokenEndpointRateLimitConfig(deps.env)),
-    express.urlencoded({ extended: false }),
+    createLazyTokenRateLimiter(deps),
+    express.urlencoded({ extended: false, limit: "100kb" }),
     createTokenHandler(deps)
   );
 
   return router;
+}
+
+/**
+ * Rate limiter for /token that defers reading ENTERPRISE_TOKEN_RATE_LIMIT_*
+ * until enterprise auth is known-enabled, so invalid values can't crash
+ * startup (or change /token's 404) for deployments with the feature disabled.
+ * With the feature enabled, an invalid rate-limit config fails closed (500).
+ */
+function createLazyTokenRateLimiter(
+  deps: EnterpriseAuthRouteDeps
+): RequestHandler {
+  let limiter: RequestHandler | undefined;
+  return (req, res, next) => {
+    const env = deps.env ?? process.env;
+    let enabled: boolean;
+    try {
+      enabled = loadEnterpriseAuthConfig(env) !== null;
+    } catch {
+      enabled = true; // enabled but misconfigured — let the handler 500
+    }
+    if (!enabled) {
+      return next(); // handler responds 404 without touching limiter config
+    }
+    if (!limiter) {
+      try {
+        limiter = createTokenEndpointRateLimiter(
+          getTokenEndpointRateLimitConfig(env)
+        );
+      } catch (error) {
+        console.error(
+          "Invalid token endpoint rate limit configuration:",
+          error instanceof Error ? error.message : "unknown error"
+        );
+        return res.status(500).json({
+          error: "server_error",
+          error_description: "Enterprise-managed authorization is misconfigured",
+        });
+      }
+    }
+    return limiter(req, res, next);
+  };
 }

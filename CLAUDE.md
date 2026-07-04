@@ -65,6 +65,7 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - `src/lib/auth/accessTokens.ts` — issue/verify enterprise access tokens (`typ: at+jwt`)
 - `src/lib/auth/routes.ts` — `POST /token` plus RFC 8414 (`/.well-known/oauth-authorization-server`) and RFC 9728 (`/.well-known/oauth-protected-resource[/mcp]`) metadata; all return 404 when disabled
 - `src/lib/middleware/enterpriseAuth.ts` — gates `/mcp` with issued tokens (`required` or `optional` mode); 401 responses carry a `WWW-Authenticate: Bearer resource_metadata="..."` challenge. After verifying the enterprise token it resolves Skyflow credentials from the `X-Skyflow-Authorization` header → `SKYFLOW_API_KEY` env var → existing fallbacks, and exposes the enterprise identity as `req.enterpriseAuth`
+- `src/lib/auth/scopes.ts` — tool-level scope enforcement: when the enterprise access token carries a `scope` claim, each scope names a permitted tool (`de-identify`, `re-identify`); tokens without a scope claim are unrestricted. Denied calls return an `insufficient_scope` isError tool result
 - Full setup guide (Skyflow-hosted-with-Okta and self-hosted-with-customer-IdP scenarios): `docs/enterprise-managed-auth.md`
 
 **MCP Server Instance**
