@@ -127,7 +127,8 @@ describe("enterprise auth middleware", () => {
       const req = createMockRequest({
         headers: { authorization: `Bearer ${await validToken()}` },
       });
-      const { next } = await runMiddleware(enabledEnv(), req);
+      const env = enabledEnv({ SKYFLOW_API_KEY: "service-api-key" });
+      const { next } = await runMiddleware(env, req);
       expect(next).toHaveBeenCalled();
       expect(req.enterpriseAuth).toEqual(identity);
       // The enterprise token must not leak downstream as a Skyflow credential
@@ -208,11 +209,35 @@ describe("enterprise auth middleware", () => {
       expect(req.isAnonymousMode).toBe(false);
     });
 
-    it("leaves credentials unresolved for downstream fallbacks when none provided", async () => {
+    it("rejects required-mode requests with no Skyflow credentials (no anonymous demotion)", async () => {
       const req = createMockRequest({
         headers: { authorization: `Bearer ${await validToken()}` },
       });
+      const { next, captured } = await runMiddleware(enabledEnv(), req);
+      expect(next).not.toHaveBeenCalled();
+      expect(captured.statusCode).toBe(401);
+      expect(captured.jsonBody.error).toBe("missing_skyflow_credentials");
+    });
+
+    it("lets the apiKey query parameter through in required mode", async () => {
+      const req = createMockRequest({
+        headers: { authorization: `Bearer ${await validToken()}` },
+        query: { apiKey: "sky-param-key" },
+      });
       const { next } = await runMiddleware(enabledEnv(), req);
+      expect(next).toHaveBeenCalled();
+      // Left unresolved: authenticateBearer consumes the query parameter
+      expect(req.skyflowCredentials).toBeUndefined();
+    });
+
+    it("leaves credentials unresolved for downstream fallbacks in optional mode", async () => {
+      const req = createMockRequest({
+        headers: { authorization: `Bearer ${await validToken()}` },
+      });
+      const { next } = await runMiddleware(
+        enabledEnv({ ENTERPRISE_AUTH_MODE: "optional" }),
+        req
+      );
       expect(next).toHaveBeenCalled();
       expect(req.skyflowCredentials).toBeUndefined();
     });

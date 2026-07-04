@@ -82,7 +82,10 @@ The `Authorization` header now carries the enterprise access token, so Skyflow v
 2. **`SKYFLOW_API_KEY` environment variable** — a server-wide service credential. The typical setup for enterprise deployments: employees authenticate with SSO only and never handle Skyflow credentials.
 3. **Existing fallbacks** — the `apiKey` query parameter, then anonymous mode if configured.
 
-Note the last fallback: an enterprise-authenticated request with no Skyflow credentials at all degrades to [anonymous mode](../README.md#anonymous-mode-try-before-you-buy) when `ANON_MODE_*` is configured (responses are clearly marked with `anonymousMode: true`), and receives a 401 otherwise. This is deliberate — it gives SSO users a working demo path before vault credentials are provisioned. Deployments that want enterprise users to always hit a real vault should set `SKYFLOW_API_KEY`; deployments that want a hard failure instead should leave `ANON_MODE_*` unset.
+What happens when none of these yield credentials depends on the mode:
+
+- **`required` mode returns 401** (`missing_skyflow_credentials`) — a deployment that demands SSO on every request is never silently served from the anonymous demo vault, even when `ANON_MODE_*` is configured.
+- **`optional` mode degrades to [anonymous mode](../README.md#anonymous-mode-try-before-you-buy)** when `ANON_MODE_*` is configured (responses are clearly marked with `anonymousMode: true`), and 401s otherwise. This is deliberate — a working demo path for mixed deployments before vault credentials are provisioned. Set `SKYFLOW_API_KEY` if enterprise users should always hit a real vault.
 
 ## Deployment scenario 1: Skyflow-hosted endpoint + Skyflow Okta
 

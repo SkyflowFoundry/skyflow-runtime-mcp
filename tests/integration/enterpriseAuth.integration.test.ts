@@ -267,6 +267,7 @@ describe("enterprise auth HTTP flow (integration)", () => {
       // The failure comes from Skyflow credential resolution, not the
       // enterprise token (which was valid and consumed)
       expect(res.wwwAuthenticate).toBeNull();
+      expect(res.body.error).toBe("missing_skyflow_credentials");
     } finally {
       process.env.SKYFLOW_API_KEY = "sky-integration-dummy-key";
     }

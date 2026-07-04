@@ -8,7 +8,9 @@
  *
  *   1. X-Skyflow-Authorization header (per-user Skyflow bearer token/API key)
  *   2. SKYFLOW_API_KEY environment variable (server-wide service credential)
- *   3. Existing fallbacks in authenticateBearer (apiKey query param, anonymous mode)
+ *   3. apiKey query parameter (consumed downstream by authenticateBearer)
+ *   4. Anonymous mode — in `optional` mode only. `required` mode returns 401
+ *      instead of demoting an SSO-authenticated user to the demo vault.
  *
  * When enterprise auth is disabled this middleware is a no-op.
  */
@@ -116,12 +118,30 @@ function resolveSkyflowCredentials(
     return true;
   }
 
-  // Leave credentials unresolved: authenticateBearer will fall back to the
-  // apiKey query parameter or anonymous mode. Deliberate trade-off: an
-  // enterprise-authenticated user without Skyflow credentials degrades to
-  // anonymous mode (clearly marked via anonymousMode:true in tool responses)
-  // rather than being rejected. Deployments that don't want this should set
-  // SKYFLOW_API_KEY or leave ANON_MODE_* unconfigured (yielding a 401).
+  if (config.mode === "required") {
+    // Strict posture: never demote an enterprise-authenticated request to
+    // anonymous mode. The apiKey query parameter is still honored (consumed
+    // downstream by authenticateBearer); anything less is a hard 401.
+    const apiKeyParam = req.query?.apiKey;
+    if (typeof apiKeyParam === "string" && apiKeyParam.trim().length > 0) {
+      return true;
+    }
+    res.status(401).json({
+      error: "missing_skyflow_credentials",
+      error_description:
+        "Enterprise authorization succeeded, but no Skyflow credentials were provided. " +
+        "Send them in the X-Skyflow-Authorization header, configure SKYFLOW_API_KEY on the server, " +
+        "or pass the apiKey query parameter.",
+    });
+    return false;
+  }
+
+  // Optional mode: leave credentials unresolved so authenticateBearer falls
+  // back to the apiKey query parameter or anonymous mode. Deliberate
+  // trade-off: an enterprise-authenticated user without Skyflow credentials
+  // degrades to anonymous mode (clearly marked via anonymousMode:true in
+  // tool responses) rather than being rejected — a demo path for mixed
+  // deployments. Set SKYFLOW_API_KEY to avoid it.
   return true;
 }
 
