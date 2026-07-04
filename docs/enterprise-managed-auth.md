@@ -55,6 +55,8 @@ All three return 404 when the feature is disabled. Unauthenticated `/mcp` reques
 | `ENTERPRISE_MCP_RESOURCE` | no | RFC 9728 resource identifier of the MCP endpoint. Defaults to `{ENTERPRISE_AUTH_ISSUER}/mcp`. Issued tokens are audience-restricted to this value. |
 | `ENTERPRISE_ALLOWED_CLIENT_IDS` | no | Comma-separated allowlist of MCP client IDs (matched against the ID-JAG `client_id` claim). Empty = any client the IdP authorizes. |
 | `ENTERPRISE_TOKEN_TTL_SECONDS` | no | Lifetime of issued access tokens. Default 3600. |
+| `ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS` | no | Max `/token` requests per client IP per window. Default 30. |
+| `ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS` | no | `/token` rate limit window in milliseconds. Default 60000. |
 | `SKYFLOW_API_KEY` | no | Server-side Skyflow service credential used for vault access on requests authenticated via enterprise auth (see below). |
 
 Misconfiguration fails **closed**: if the feature is enabled but required variables are missing or invalid, `/mcp` returns 500 rather than silently skipping authorization.
@@ -66,6 +68,8 @@ The `Authorization` header now carries the enterprise access token, so Skyflow v
 1. **`X-Skyflow-Authorization` header** — a per-user Skyflow bearer token or API key (with or without a `Bearer ` prefix), for deployments where each user has their own vault credentials.
 2. **`SKYFLOW_API_KEY` environment variable** — a server-wide service credential. The typical setup for enterprise deployments: employees authenticate with SSO only and never handle Skyflow credentials.
 3. **Existing fallbacks** — the `apiKey` query parameter, then anonymous mode if configured.
+
+Note the last fallback: an enterprise-authenticated request with no Skyflow credentials at all degrades to [anonymous mode](../README.md#anonymous-mode-try-before-you-buy) when `ANON_MODE_*` is configured (responses are clearly marked with `anonymousMode: true`), and receives a 401 otherwise. This is deliberate — it gives SSO users a working demo path before vault credentials are provisioned. Deployments that want enterprise users to always hit a real vault should set `SKYFLOW_API_KEY`; deployments that want a hard failure instead should leave `ANON_MODE_*` unset.
 
 ## Deployment scenario 1: Skyflow-hosted endpoint + Skyflow Okta
 
@@ -137,5 +141,7 @@ curl -X POST https://mcp.example.com/mcp \
 - **Audience restriction**: issued access tokens carry `aud = ENTERPRISE_MCP_RESOURCE` and `typ: at+jwt`; they are only accepted by this deployment.
 - **Algorithm pinning**: ID-JAGs must be asymmetrically signed (RS/PS/ES/EdDSA); symmetric algorithms are rejected to prevent key-confusion attacks. Issued tokens are pinned to HS256.
 - **Replay detection** for ID-JAG `jti` values is in-memory and therefore best-effort on serverless/multi-instance deployments; ID-JAGs are short-lived (typically 5 minutes), which bounds the window. Use a shared store if your threat model requires strict single-use.
+- **Token endpoint hardening**: `/token` is unauthenticated by design (clients present ID-JAGs), so it is rate-limited per client IP (`ENTERPRISE_TOKEN_RATE_LIMIT_*`), and the OIDC discovery request to the IdP carries a 5-second timeout so a hung IdP cannot stall requests.
+- **`resource` claim**: an ID-JAG without a `resource` claim is accepted — the extension makes the token-exchange `resource` parameter optional and only constrains the claim "if present". The `aud` check still binds every grant to this authorization server, which serves exactly one resource.
 - **Signing key hygiene**: `ENTERPRISE_AUTH_SIGNING_KEY` is a bearer-token-minting secret. Store it in your platform's secret manager, rotate it periodically (rotation invalidates outstanding access tokens, forcing a silent re-exchange), and never commit it.
 - The enterprise identity (`sub`, `email`, `scope`, `client_id`) of a verified request is available to request handling as `req.enterpriseAuth`, with the `sub` claim as the stable identifier for account linking per the spec.

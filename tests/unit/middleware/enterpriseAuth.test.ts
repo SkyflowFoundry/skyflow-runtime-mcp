@@ -93,6 +93,9 @@ describe("enterprise auth middleware", () => {
       expect(captured.headers["www-authenticate"]).toContain(
         `resource_metadata="${TEST_ISSUER}/.well-known/oauth-protected-resource"`
       );
+      // Body follows the RFC 6749 §5.2 shape for programmatic clients
+      expect(captured.jsonBody.error).toBe("unauthorized");
+      expect(captured.jsonBody.error_description).toBeTruthy();
     });
 
     it("rejects Skyflow credentials that are not enterprise tokens", async () => {
@@ -103,6 +106,7 @@ describe("enterprise auth middleware", () => {
       expect(next).not.toHaveBeenCalled();
       expect(captured.statusCode).toBe(401);
       expect(captured.headers["www-authenticate"]).toContain('error="invalid_token"');
+      expect(captured.jsonBody.error).toBe("invalid_token");
     });
 
     it("rejects expired enterprise tokens", async () => {

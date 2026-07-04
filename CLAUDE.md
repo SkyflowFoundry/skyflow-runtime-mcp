@@ -147,7 +147,7 @@ Optional fallback variables in `.env.local`:
 
 **Enterprise-managed authorization variables** (all optional; feature off unless `ENTERPRISE_AUTH_ENABLED=true`):
 - `ENTERPRISE_AUTH_ENABLED`, `ENTERPRISE_AUTH_ISSUER`, `ENTERPRISE_IDP_ISSUER`, `ENTERPRISE_AUTH_SIGNING_KEY` (required when enabled)
-- `ENTERPRISE_AUTH_MODE` (`required`|`optional`), `ENTERPRISE_IDP_JWKS_URI`, `ENTERPRISE_IDP_AUDIENCE`, `ENTERPRISE_MCP_RESOURCE`, `ENTERPRISE_ALLOWED_CLIENT_IDS`, `ENTERPRISE_TOKEN_TTL_SECONDS`
+- `ENTERPRISE_AUTH_MODE` (`required`|`optional`), `ENTERPRISE_IDP_JWKS_URI`, `ENTERPRISE_IDP_AUDIENCE`, `ENTERPRISE_MCP_RESOURCE`, `ENTERPRISE_ALLOWED_CLIENT_IDS`, `ENTERPRISE_TOKEN_TTL_SECONDS`, `ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS`, `ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS`
 - `SKYFLOW_API_KEY`: server-side Skyflow service credential, used only for requests authenticated via enterprise auth
 
 **Removed variables** (no longer used):

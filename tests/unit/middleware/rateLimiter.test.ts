@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createAnonymousRateLimiter,
   getAnonymousRateLimitConfig,
+  createTokenEndpointRateLimiter,
+  getTokenEndpointRateLimitConfig,
   getClientId,
   clearRateLimitStore,
   getRateLimitStoreSize,
@@ -351,6 +353,87 @@ describe("Anonymous Rate Limiter", () => {
 
         expect(getRateLimitStoreSize()).toBe(0);
       });
+    });
+  });
+});
+
+describe("Token Endpoint Rate Limiter", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    clearRateLimitStore();
+  });
+
+  describe("getTokenEndpointRateLimitConfig()", () => {
+    it("should default to 30 requests per 60s window", () => {
+      const config = getTokenEndpointRateLimitConfig({} as NodeJS.ProcessEnv);
+      expect(config).toEqual({ maxRequests: 30, windowMs: 60000 });
+    });
+
+    it("should use env var values when set", () => {
+      const config = getTokenEndpointRateLimitConfig({
+        ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS: "5",
+        ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS: "1000",
+      } as NodeJS.ProcessEnv);
+      expect(config).toEqual({ maxRequests: 5, windowMs: 1000 });
+    });
+
+    it("should throw on invalid values", () => {
+      expect(() =>
+        getTokenEndpointRateLimitConfig({
+          ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS: "0",
+        } as NodeJS.ProcessEnv)
+      ).toThrow(/positive integer/);
+    });
+  });
+
+  describe("createTokenEndpointRateLimiter()", () => {
+    it("should rate-limit all requests regardless of anonymous mode", () => {
+      const rateLimiter = createTokenEndpointRateLimiter({
+        maxRequests: 2,
+        windowMs: 60000,
+      });
+
+      for (let i = 0; i < 2; i++) {
+        const req = createMockRequest() as Request;
+        const { res } = createMockResponse();
+        const next = vi.fn();
+        rateLimiter(req, res as Response, next);
+        expect(next).toHaveBeenCalled();
+      }
+
+      const req = createMockRequest() as Request;
+      const mock = createMockResponse();
+      const next = vi.fn();
+      rateLimiter(req, mock.res as Response, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(mock.statusCode).toBe(429);
+      expect((mock.jsonBody as { error: string }).error).toBe(
+        "rate_limit_exceeded"
+      );
+    });
+
+    it("should track clients independently of the anonymous limiter", () => {
+      const tokenLimiter = createTokenEndpointRateLimiter({
+        maxRequests: 1,
+        windowMs: 60000,
+      });
+      const anonLimiter = createAnonymousRateLimiter({
+        maxRequests: 1,
+        windowMs: 60000,
+      });
+
+      // Exhaust the token limiter for this IP
+      tokenLimiter(
+        createMockRequest() as Request,
+        createMockResponse().res as Response,
+        vi.fn()
+      );
+
+      // The anonymous limiter still allows the same IP (separate key space)
+      const req = createMockRequest({ isAnonymousMode: true }) as Request;
+      const next = vi.fn();
+      anonLimiter(req, createMockResponse().res as Response, next);
+      expect(next).toHaveBeenCalled();
     });
   });
 });

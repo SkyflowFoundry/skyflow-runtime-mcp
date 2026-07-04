@@ -32,6 +32,9 @@ const ALLOWED_ID_JAG_ALGORITHMS = [
 /** Clock skew tolerance for exp/iat validation, in seconds */
 const CLOCK_TOLERANCE_SECONDS = 60;
 
+/** Timeout for the OIDC discovery request, so a hung IdP can't stall /token */
+const DISCOVERY_TIMEOUT_MS = 5000;
+
 export type OAuthTokenErrorCode =
   | "invalid_request"
   | "invalid_grant"
@@ -84,7 +87,9 @@ async function discoverJwksUri(idpIssuer: string): Promise<string> {
   const discoveryUrl = `${idpIssuer}/.well-known/openid-configuration`;
   let response: Response;
   try {
-    response = await fetch(discoveryUrl);
+    response = await fetch(discoveryUrl, {
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+    });
   } catch (error) {
     throw new Error(
       `Failed to reach IdP discovery endpoint ${discoveryUrl}: ${
@@ -212,6 +217,10 @@ export async function validateIdJag(
 
   // The resource claim, when present, MUST be this MCP server's resource
   // identifier — the issued access token is audience-restricted to it.
+  // Absence is intentionally permitted: the `resource` parameter is OPTIONAL
+  // in the extension's token exchange, and the profile only constrains the
+  // claim "if present". The `aud` check above still binds the grant to this
+  // authorization server, which serves exactly one resource.
   const resource = payload.resource;
   if (resource !== undefined) {
     const matches = Array.isArray(resource)

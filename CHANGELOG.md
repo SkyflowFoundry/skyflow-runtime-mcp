@@ -5,7 +5,7 @@
 ### Added
 
 - **Enterprise-Managed Authorization (opt-in)** — Implements the MCP `io.modelcontextprotocol/enterprise-managed-authorization` extension (ID-JAG profile). When `ENTERPRISE_AUTH_ENABLED=true`, the server acts as its own Resource Authorization Server: it validates Identity Assertion JWT Authorization Grants issued by an enterprise IdP (Okta, Entra, any OIDC IdP) and issues short-lived, audience-restricted access tokens that gate `/mcp`.
-  - New endpoints: `POST /token` (RFC 7523 jwt-bearer grant), `GET /.well-known/oauth-authorization-server` (RFC 8414, advertises `urn:ietf:params:oauth:grant-profile:id-jag`), `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728). All 404 when the feature is disabled.
+  - New endpoints: `POST /token` (RFC 7523 jwt-bearer grant, rate-limited per client IP via `ENTERPRISE_TOKEN_RATE_LIMIT_*`), `GET /.well-known/oauth-authorization-server` (RFC 8414, advertises `urn:ietf:params:oauth:grant-profile:id-jag`), `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728). All 404 when the feature is disabled.
   - New middleware gates `/mcp` in `required` or `optional` mode; 401 responses carry a `WWW-Authenticate: Bearer resource_metadata="..."` challenge for client discovery.
   - Skyflow vault credentials under enterprise auth resolve from the `X-Skyflow-Authorization` header, then the new `SKYFLOW_API_KEY` service-credential env var, then existing fallbacks (`apiKey` query param, anonymous mode).
   - ID-JAG validation covers `typ: oauth-id-jag+jwt`, IdP JWKS signature (explicit URI or OIDC discovery), issuer/audience/expiry, `resource` claim matching, optional `client_id` allowlist, and best-effort `jti` replay detection. Misconfiguration fails closed.

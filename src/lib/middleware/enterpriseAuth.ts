@@ -53,8 +53,11 @@ function unauthorized(
     `resource_metadata="${config.issuer}/.well-known/oauth-protected-resource"`
   );
   res.set("WWW-Authenticate", `Bearer ${challengeParts.join(", ")}`);
+  // Body mirrors the RFC 6749 §5.2 shape used by /token so programmatic
+  // clients get a machine-readable code, not just the header challenge.
   res.status(401).json({
-    error:
+    error: options.error || "unauthorized",
+    error_description:
       options.description ||
       "Enterprise authorization required. Obtain an access token via the ID-JAG flow described in the protected resource metadata.",
   });
@@ -100,7 +103,11 @@ function resolveSkyflowCredentials(
   }
 
   // Leave credentials unresolved: authenticateBearer will fall back to the
-  // apiKey query parameter or anonymous mode.
+  // apiKey query parameter or anonymous mode. Deliberate trade-off: an
+  // enterprise-authenticated user without Skyflow credentials degrades to
+  // anonymous mode (clearly marked via anonymousMode:true in tool responses)
+  // rather than being rejected. Deployments that don't want this should set
+  // SKYFLOW_API_KEY or leave ANON_MODE_* unconfigured (yielding a 401).
   return true;
 }
 
@@ -126,7 +133,8 @@ export function createEnterpriseAuthMiddleware(
         // Fail closed: a misconfigured deployment must not silently skip auth
         console.error("Enterprise auth configuration error:", error.message);
         return res.status(500).json({
-          error: "Enterprise-managed authorization is misconfigured",
+          error: "server_error",
+          error_description: "Enterprise-managed authorization is misconfigured",
         });
       }
       throw error;

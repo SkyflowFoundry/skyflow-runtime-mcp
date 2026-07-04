@@ -23,6 +23,10 @@ import {
   JWT_BEARER_GRANT_TYPE,
 } from "./idJag.js";
 import { issueAccessToken } from "./accessTokens.js";
+import {
+  createTokenEndpointRateLimiter,
+  getTokenEndpointRateLimitConfig,
+} from "../middleware/rateLimiter.js";
 
 export interface EnterpriseAuthRouteDeps {
   /** Environment source, defaults to process.env (injectable for tests) */
@@ -177,6 +181,7 @@ export function createEnterpriseAuthRouter(
   );
   router.post(
     "/token",
+    createTokenEndpointRateLimiter(getTokenEndpointRateLimitConfig(deps.env)),
     express.urlencoded({ extended: false }),
     createTokenHandler(deps)
   );
