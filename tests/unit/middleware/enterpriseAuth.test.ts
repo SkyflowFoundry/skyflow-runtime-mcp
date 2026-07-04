@@ -148,12 +148,12 @@ describe("enterprise auth middleware", () => {
       const req = createMockRequest({
         headers: {
           authorization: `Bearer ${await validToken()}`,
-          [SKYFLOW_AUTH_HEADER]: "sky-abc123-def456",
+          [SKYFLOW_AUTH_HEADER]: "sky-abc123-def456", // gitleaks:allow
         },
       });
       const { next } = await runMiddleware(enabledEnv(), req);
       expect(next).toHaveBeenCalled();
-      expect(req.skyflowCredentials).toEqual({ apiKey: "sky-abc123-def456" });
+      expect(req.skyflowCredentials).toEqual({ apiKey: "sky-abc123-def456" }); // gitleaks:allow
     });
 
     it("rejects a malformed X-Skyflow-Authorization header", async () => {
