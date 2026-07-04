@@ -20,6 +20,10 @@ import { handleDeIdentify } from "./lib/tools/deIdentify.js";
 import { handleReIdentify } from "./lib/tools/reIdentify.js";
 import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
+import { createEnterpriseAuthMiddleware } from "./lib/middleware/enterpriseAuth.js";
+import { createEnterpriseAuthRouter } from "./lib/auth/routes.js";
+import { loadEnterpriseAuthConfig } from "./lib/auth/config.js";
+import type { EnterpriseIdentity } from "./lib/auth/accessTokens.js";
 import {
   createAnonymousRateLimiter,
   getAnonymousRateLimitConfig,
@@ -174,6 +178,28 @@ app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
 // Serve static files from the public directory
 app.use(express.static("public"));
 
+// Enterprise-managed authorization (MCP extension
+// io.modelcontextprotocol/enterprise-managed-authorization): OAuth discovery
+// metadata and the ID-JAG token endpoint. All routes 404 unless
+// ENTERPRISE_AUTH_ENABLED=true.
+app.use(createEnterpriseAuthRouter());
+
+// Surface enterprise auth status/misconfiguration at startup. A misconfigured
+// deployment still fails closed per-request (the middleware returns 500).
+try {
+  const enterpriseConfig = loadEnterpriseAuthConfig();
+  if (enterpriseConfig) {
+    console.log(
+      `Enterprise-managed authorization enabled (${enterpriseConfig.mode} mode, IdP: ${enterpriseConfig.idpIssuer})`
+    );
+  }
+} catch (error) {
+  console.error(
+    "Enterprise-managed authorization is misconfigured:",
+    error instanceof Error ? error.message : error
+  );
+}
+
 // Create rate limiter for anonymous mode
 const anonymousRateLimiter = createAnonymousRateLimiter(
   getAnonymousRateLimitConfig()
@@ -186,11 +212,12 @@ declare global {
       skyflowCredentials?: { token: string } | { apiKey: string };
       isAnonymousMode: boolean; // Always set by authenticateBearer middleware
       anonVaultConfig?: { vaultId: string; vaultUrl: string };
+      enterpriseAuth?: EnterpriseIdentity; // Set when enterprise auth verified the request
     }
   }
 }
 
-app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
+app.post("/mcp", createEnterpriseAuthMiddleware(), authenticateBearer, anonymousRateLimiter, async (req, res) => {
   // Determine vault configuration based on mode
   let vaultId: string | undefined;
   let vaultUrl: string | undefined;

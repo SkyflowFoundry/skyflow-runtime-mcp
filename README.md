@@ -95,6 +95,12 @@ See [Integration with Claude Desktop](#integration-with-claude-desktop) for one 
 
 When self-hosting, `VAULT_ID` and `VAULT_URL` can be set as environment variables in `.env.local` — query parameters override them per request. Useful for pinning a single vault without rewriting client URLs. See [Environment Variables](#environment-variables).
 
+## Enterprise-Managed Authorization (SSO)
+
+The server supports the MCP [Enterprise-Managed Authorization extension](https://modelcontextprotocol.io/extensions/enterprise-managed-authorization): organizations can gate access to `/mcp` through their identity provider (Okta, Entra, any OIDC IdP). Employees sign in to their MCP client with corporate SSO, the client exchanges the resulting identity assertion for an ID-JAG at the IdP, and this server's built-in `/token` endpoint turns the ID-JAG into a short-lived access token for `/mcp` — no per-user Skyflow credentials or per-server authorization prompts needed.
+
+The feature is off by default and enabled via `ENTERPRISE_AUTH_ENABLED=true`. It supports a `required` mode (every request needs SSO-derived auth — for self-hosted enterprise deployments) and an `optional` mode (SSO tokens accepted alongside ordinary Skyflow credentials — for shared endpoints). See [docs/enterprise-managed-auth.md](docs/enterprise-managed-auth.md) for the full flow, environment variable reference, and IdP setup for both deployment scenarios.
+
 ## Installation
 
 ```bash
@@ -159,7 +165,9 @@ Create a `.env.local` file with optional fallback values:
 - `VAULT_URL`: Your Skyflow vault URL (optional - can be provided via query parameter, e.g., `https://ebfc9bee4242.vault.skyflowapis.com`)
 - `PORT`: Server port (default: 3000)
 
-**Note**: `SKYFLOW_API_KEY`, `REQUIRED_BEARER_TOKEN`, `ACCOUNT_ID`, and `WORKSPACE_ID` are no longer used. The bearer token is passed through from the client to Skyflow; account/workspace IDs were never consumed by the SDK.
+For enterprise-managed authorization variables (`ENTERPRISE_AUTH_*`, `ENTERPRISE_IDP_*`, `SKYFLOW_API_KEY`), see [docs/enterprise-managed-auth.md](docs/enterprise-managed-auth.md).
+
+**Note**: `REQUIRED_BEARER_TOKEN`, `ACCOUNT_ID`, and `WORKSPACE_ID` are no longer used. The bearer token is passed through from the client to Skyflow; account/workspace IDs were never consumed by the SDK. `SKYFLOW_API_KEY` is only consumed as a service credential for enterprise-managed authorization deployments.
 
 ## Anonymous Mode (Try Before You Buy)
 

@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Enterprise-Managed Authorization (opt-in)** — Implements the MCP `io.modelcontextprotocol/enterprise-managed-authorization` extension (ID-JAG profile). When `ENTERPRISE_AUTH_ENABLED=true`, the server acts as its own Resource Authorization Server: it validates Identity Assertion JWT Authorization Grants issued by an enterprise IdP (Okta, Entra, any OIDC IdP) and issues short-lived, audience-restricted access tokens that gate `/mcp`.
+  - New endpoints: `POST /token` (RFC 7523 jwt-bearer grant), `GET /.well-known/oauth-authorization-server` (RFC 8414, advertises `urn:ietf:params:oauth:grant-profile:id-jag`), `GET /.well-known/oauth-protected-resource[/mcp]` (RFC 9728). All 404 when the feature is disabled.
+  - New middleware gates `/mcp` in `required` or `optional` mode; 401 responses carry a `WWW-Authenticate: Bearer resource_metadata="..."` challenge for client discovery.
+  - Skyflow vault credentials under enterprise auth resolve from the `X-Skyflow-Authorization` header, then the new `SKYFLOW_API_KEY` service-credential env var, then existing fallbacks (`apiKey` query param, anonymous mode).
+  - ID-JAG validation covers `typ: oauth-id-jag+jwt`, IdP JWKS signature (explicit URI or OIDC discovery), issuer/audience/expiry, `resource` claim matching, optional `client_id` allowlist, and best-effort `jti` replay detection. Misconfiguration fails closed.
+  - New env vars: `ENTERPRISE_AUTH_ENABLED`, `ENTERPRISE_AUTH_ISSUER`, `ENTERPRISE_IDP_ISSUER`, `ENTERPRISE_AUTH_SIGNING_KEY`, `ENTERPRISE_AUTH_MODE`, `ENTERPRISE_IDP_JWKS_URI`, `ENTERPRISE_IDP_AUDIENCE`, `ENTERPRISE_MCP_RESOURCE`, `ENTERPRISE_ALLOWED_CLIENT_IDS`, `ENTERPRISE_TOKEN_TTL_SECONDS`, `SKYFLOW_API_KEY`.
+  - 82 new unit tests (`tests/unit/auth/`, `tests/unit/middleware/enterpriseAuth.test.ts`) and a setup guide in `docs/enterprise-managed-auth.md`.
+  - Added `jose` dependency for JWT/JWKS handling.
+
 - **MCP Apps UI for all three tools** — Each tool (`dehydrate`, `rehydrate`, `dehydrate_file`) now has an interactive vanilla TypeScript UI that renders inline in MCP Apps-capable hosts. Text-only hosts continue to receive JSON responses as before.
   - **Dehydrate UI**: Side-by-side before/after text panels with color-coded entity highlights, confidence scores, and an entity breakdown table. Shows anonymous mode banner when applicable.
   - **Rehydrate UI**: Token-to-original mapping display with color-matched highlights across before/after panels.

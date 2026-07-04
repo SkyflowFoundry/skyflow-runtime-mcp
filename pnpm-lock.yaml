@@ -20,6 +20,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.1.0
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
       skyflow-node:
         specifier: ^2.0.0
         version: 2.0.0
@@ -940,8 +943,8 @@ packages:
     resolution: {integrity: sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==}
     engines: {node: '>=8'}
 
-  jose@6.2.2:
-    resolution: {integrity: sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ==}
+  jose@6.2.3:
+    resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
 
   js-base64@3.7.7:
     resolution: {integrity: sha512-7rCnleh0z2CkXhH67J8K1Ytz0b2Y+yxTPL+/KOJoa20hfnVQ/3/T6W/KflYI4bRHRagNeXeU2bkNGI3v1oS/lw==}
@@ -1650,7 +1653,7 @@ snapshots:
       express: 5.2.1
       express-rate-limit: 8.3.1(express@5.2.1)
       hono: 4.12.9
-      jose: 6.2.2
+      jose: 6.2.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.0
       raw-body: 3.0.1
@@ -2307,7 +2310,7 @@ snapshots:
       html-escaper: 2.0.2
       istanbul-lib-report: 3.0.1
 
-  jose@6.2.2: {}
+  jose@6.2.3: {}
 
   js-base64@3.7.7: {}
 

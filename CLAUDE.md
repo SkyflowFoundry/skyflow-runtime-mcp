@@ -55,6 +55,17 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Accepts query parameters: `vaultId`, `vaultUrl`, `apiKey` (optional)
 - Uses credentials extraction middleware to validate either Authorization header or apiKey query parameter
 - Configured with 5MB JSON payload limit to support base64-encoded files
+- Optionally exposes enterprise-managed authorization endpoints (see below)
+
+**Enterprise-Managed Authorization Layer** (`src/lib/auth/`, opt-in)
+- Implements the MCP `io.modelcontextprotocol/enterprise-managed-authorization` extension (ID-JAG profile: RFC 8693 token exchange at the IdP + RFC 7523 jwt-bearer grant at this server)
+- When `ENTERPRISE_AUTH_ENABLED=true`, the server acts as its own Resource Authorization Server: it validates ID-JAGs issued by an enterprise IdP (Okta, Entra, any OIDC IdP) and issues short-lived HS256 access tokens audience-restricted to the MCP resource identifier
+- `src/lib/auth/config.ts` — env var loading/validation (fails closed on misconfiguration)
+- `src/lib/auth/idJag.ts` — ID-JAG validation: `typ: oauth-id-jag+jwt` header, IdP JWKS signature (explicit URI or OIDC discovery), issuer/audience/expiry, `resource` claim, client allowlist, best-effort in-memory `jti` replay detection
+- `src/lib/auth/accessTokens.ts` — issue/verify enterprise access tokens (`typ: at+jwt`)
+- `src/lib/auth/routes.ts` — `POST /token` plus RFC 8414 (`/.well-known/oauth-authorization-server`) and RFC 9728 (`/.well-known/oauth-protected-resource[/mcp]`) metadata; all return 404 when disabled
+- `src/lib/middleware/enterpriseAuth.ts` — gates `/mcp` with issued tokens (`required` or `optional` mode); 401 responses carry a `WWW-Authenticate: Bearer resource_metadata="..."` challenge. After verifying the enterprise token it resolves Skyflow credentials from the `X-Skyflow-Authorization` header → `SKYFLOW_API_KEY` env var → existing fallbacks, and exposes the enterprise identity as `req.enterpriseAuth`
+- Full setup guide (Skyflow-hosted-with-Okta and self-hosted-with-customer-IdP scenarios): `docs/enterprise-managed-auth.md`
 
 **MCP Server Instance**
 - Registers two active tools: `de-identify` and `re-identify`
@@ -127,14 +138,19 @@ This ensures type safety and provides clear error messages for invalid inputs.
 1. **Bearer token via header** (JWT): Clients provide their Skyflow bearer token via `Authorization: Bearer <jwt>` header. The server auto-detects JWTs by their format (3 dot-separated base64url parts).
 2. **API key via header**: Clients can also pass a Skyflow API key via `Authorization: Bearer <api-key>` header. If the value doesn't look like a JWT, it's treated as an API key.
 3. **API key via query parameter** (fallback): Clients can pass a Skyflow API key via `apiKey` query parameter
+4. **Enterprise-managed authorization** (opt-in): the `Authorization` header carries an enterprise access token issued by this server's `/token` endpoint after an ID-JAG exchange with the org's IdP; Skyflow credentials then come from the `X-Skyflow-Authorization` header, `SKYFLOW_API_KEY` env var, or existing fallbacks. See `docs/enterprise-managed-auth.md`.
 
 Optional fallback variables in `.env.local`:
 - `VAULT_ID`: Your Skyflow vault identifier (can be overridden via query parameter)
 - `VAULT_URL`: Full vault URL (e.g., `https://ebfc9bee4242.vault.skyflowapis.com`) (can be overridden via query parameter)
 - `PORT`: Server port (default: 3000)
 
+**Enterprise-managed authorization variables** (all optional; feature off unless `ENTERPRISE_AUTH_ENABLED=true`):
+- `ENTERPRISE_AUTH_ENABLED`, `ENTERPRISE_AUTH_ISSUER`, `ENTERPRISE_IDP_ISSUER`, `ENTERPRISE_AUTH_SIGNING_KEY` (required when enabled)
+- `ENTERPRISE_AUTH_MODE` (`required`|`optional`), `ENTERPRISE_IDP_JWKS_URI`, `ENTERPRISE_IDP_AUDIENCE`, `ENTERPRISE_MCP_RESOURCE`, `ENTERPRISE_ALLOWED_CLIENT_IDS`, `ENTERPRISE_TOKEN_TTL_SECONDS`
+- `SKYFLOW_API_KEY`: server-side Skyflow service credential, used only for requests authenticated via enterprise auth
+
 **Removed variables** (no longer used):
-- `SKYFLOW_API_KEY`: No longer needed - credentials are passed from client
 - `REQUIRED_BEARER_TOKEN`: No longer needed - all valid credentials are accepted and forwarded to Skyflow
 - `ACCOUNT_ID` / `WORKSPACE_ID`: Never consumed by Skyflow SDK - removed
 
@@ -283,6 +299,7 @@ The `isError` property is set to `true` when a tool returns an error condition (
 - `skyflow-node`: Skyflow SDK for deidentification (v2.0.0+)
 - `express`: Web framework (v5.1.0+)
 - `zod`: Schema validation for tool inputs/outputs
+- `jose`: JWT signing/verification and JWKS handling for enterprise-managed authorization
 - `dotenv`: Environment variable management
 - `tsx`: TypeScript execution (via npx)
 - `vite` + `vite-plugin-singlefile`: UI build pipeline (dev dependencies)
@@ -329,3 +346,4 @@ All of the above, plus:
 6. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
 7. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; `re-identify` returns an error with setup instructions
 8. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.
+9. **Enterprise auth is opt-in and fails closed** - Nothing changes unless `ENTERPRISE_AUTH_ENABLED=true`. When enabled but misconfigured, `/mcp` returns 500 rather than skipping authorization. In `required` mode the Authorization header must carry an enterprise access token, so Skyflow credentials move to `X-Skyflow-Authorization`, `SKYFLOW_API_KEY`, or the `apiKey` query parameter — direct Skyflow tokens in the Authorization header get 401. Keep middleware order on `/mcp`: enterprise auth → authenticateBearer → rate limiter.

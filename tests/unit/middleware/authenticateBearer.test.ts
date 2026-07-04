@@ -415,6 +415,24 @@ describe("Credentials Authentication", () => {
       vi.restoreAllMocks();
     });
 
+    describe("Pre-resolved credentials (enterprise auth)", () => {
+      it("should not overwrite credentials resolved by an upstream middleware", () => {
+        const req = createMockRequest({
+          headers: { authorization: "Bearer sky-other-key" },
+        }) as Request;
+        req.skyflowCredentials = { apiKey: "resolved-upstream" };
+        req.isAnonymousMode = false;
+        const { res } = createMockResponse();
+        const next = vi.fn();
+
+        authenticateBearer(req, res as Response, next);
+
+        expect(next).toHaveBeenCalled();
+        expect(req.skyflowCredentials).toEqual({ apiKey: "resolved-upstream" });
+        expect(req.isAnonymousMode).toBe(false);
+      });
+    });
+
     describe("Anonymous Mode Detection", () => {
       describe("when credentials missing and ANON env vars configured", () => {
         beforeEach(() => {

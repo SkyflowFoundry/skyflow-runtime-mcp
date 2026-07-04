@@ -182,6 +182,13 @@ export function authenticateBearer(
   res: Response,
   next: NextFunction
 ) {
+  // Credentials may already be resolved by an upstream middleware (e.g.
+  // enterprise auth resolving X-Skyflow-Authorization or SKYFLOW_API_KEY).
+  // Don't overwrite them.
+  if (req.skyflowCredentials) {
+    return next();
+  }
+
   const result = extractCredentials(
     req.headers.authorization,
     req.query.apiKey as string | undefined
