@@ -87,6 +87,15 @@ describe("Anonymous Rate Limiter", () => {
       expect(getClientId(req)).toBe("150.172.238.178");
     });
 
+    it("should comma-split repeated X-Forwarded-For headers (array form)", () => {
+      const req = createMockRequest({
+        headers: {
+          "x-forwarded-for": ["1.1.1.1, 2.2.2.2", "3.3.3.3, 4.4.4.4"],
+        } as Request["headers"],
+      });
+      expect(getClientId(req as Request)).toBe("4.4.4.4");
+    });
+
     it("should trim whitespace from extracted IP", () => {
       const req = createMockRequest({
         headers: { "x-forwarded-for": "  203.0.113.195  " },

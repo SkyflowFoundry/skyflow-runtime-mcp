@@ -28,10 +28,15 @@ export function getClientId(req: Request): string {
   // Left-most IPs are client-controlled and can be spoofed to bypass rate limiting.
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
-    const ips = Array.isArray(forwarded)
-      ? forwarded[forwarded.length - 1]
-      : forwarded.split(",").pop()!;
-    return ips.trim();
+    // Normalize both forms — a repeated header (array) and a comma-delimited
+    // list — so the rightmost entry is always a single address.
+    const entries = (Array.isArray(forwarded) ? forwarded : [forwarded]).flatMap(
+      (value) => value.split(",")
+    );
+    const rightmost = entries[entries.length - 1]?.trim();
+    if (rightmost) {
+      return rightmost;
+    }
   }
 
   // Fall back to direct IP
