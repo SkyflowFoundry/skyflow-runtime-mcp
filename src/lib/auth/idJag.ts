@@ -286,10 +286,8 @@ export async function validateIdJag(
   if (typeof jti !== "string" || jti.length === 0) {
     throw new IdJagValidationError("invalid_grant", "ID-JAG is missing a jti claim");
   }
-  const expiresAtMs =
-    typeof payload.exp === "number"
-      ? payload.exp * 1000 + CLOCK_TOLERANCE_SECONDS * 1000
-      : Date.now() + 5 * 60 * 1000;
+  // exp is guaranteed present and numeric by requiredClaims + jose validation
+  const expiresAtMs = (payload.exp as number) * 1000 + CLOCK_TOLERANCE_SECONDS * 1000;
   // The jti is deliberately burned here, before token issuance: if issuance
   // failed transiently the client must fetch a fresh ID-JAG from the IdP,
   // which is preferable to leaving a validated grant replayable.

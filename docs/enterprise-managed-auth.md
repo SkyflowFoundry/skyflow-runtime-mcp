@@ -68,6 +68,7 @@ Scopes let IdP administrators control *which tools* a user or client may invoke,
 - **Scope values name tools**: grant `de-identify` and/or `re-identify`.
 - **A token with a `scope` claim** may only invoke the named tools; other tools return an `insufficient_scope` error result.
 - **A token without a `scope` claim** is unrestricted — access is gated at the connection level only.
+- **`tools/list` is not filtered by scope**: every tool stays visible to every connection (the tool registry is shared across requests); enforcement happens at invocation time with a clear `insufficient_scope` error.
 
 For example, an Okta policy granting the `de-identify` scope to the "support" group lets those users redact text but never restore original PII, while the "compliance" group gets both scopes.
 

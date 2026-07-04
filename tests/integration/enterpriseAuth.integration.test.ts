@@ -230,6 +230,25 @@ describe("enterprise auth HTTP flow (integration)", () => {
     expect(denied.body?.result?.structuredContent?.error).toBe("insufficient_scope");
   });
 
+  it("returns 401 when enterprise auth passes but no Skyflow credentials resolve", async () => {
+    // Without SKYFLOW_API_KEY, X-Skyflow-Authorization, apiKey param, or
+    // anonymous mode, the documented hard-failure path is a credentials 401.
+    const { body } = await exchangeToken(await signIdJag());
+    delete process.env.SKYFLOW_API_KEY;
+    try {
+      const res = await callMcp(
+        { jsonrpc: "2.0", method: "tools/list", id: 7 },
+        body.access_token
+      );
+      expect(res.status).toBe(401);
+      // The failure comes from Skyflow credential resolution, not the
+      // enterprise token (which was valid and consumed)
+      expect(res.wwwAuthenticate).toBeNull();
+    } finally {
+      process.env.SKYFLOW_API_KEY = "sky-integration-dummy-key";
+    }
+  });
+
   it("lets legacy Skyflow credentials fall through in optional mode", async () => {
     process.env.ENTERPRISE_AUTH_MODE = "optional";
     try {
