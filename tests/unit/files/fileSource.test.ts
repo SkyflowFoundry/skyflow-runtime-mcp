@@ -158,6 +158,26 @@ describe("fileSource", () => {
       ).rejects.toThrow(/not allowed/);
     });
 
+    it("maps a timeout during the body read to the timeout message", async () => {
+      // Body stream that rejects mid-read with an AbortError (as the download
+      // timeout firing during the body read would).
+      const stream = new ReadableStream({
+        pull() {
+          const err = new Error("The operation was aborted.");
+          err.name = "AbortError";
+          throw err;
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(stream, { status: 200 }))
+      );
+
+      await expect(
+        downloadFileFromUrl("https://example.com/slow-body.bin")
+      ).rejects.toThrow(/timed out/);
+    });
+
     it("surfaces a DNS resolution failure as a download error", async () => {
       mockLookup.mockRejectedValue(new Error("ENOTFOUND"));
       stubFetch(new Response(Buffer.from("x"), { status: 200 }));

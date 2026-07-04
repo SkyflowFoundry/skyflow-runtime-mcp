@@ -73,6 +73,12 @@ export function extractClusterId(vaultUrl: string): string | null {
  * way guarantees both paths hit the same Skyflow host and the bearer credential
  * is never forwarded to an attacker-controlled domain.
  *
+ * Env assumption: this hardcodes the PROD host, matching the SDK instance this
+ * server creates (which passes only `clusterId`, so the SDK defaults to
+ * `Env.PROD`). If the server is ever pointed at a non-prod Skyflow environment,
+ * update both the SDK config and this helper together — otherwise the
+ * REST-based tools would target prod while the SDK path targets the other env.
+ *
  * @param clusterId - The cluster identifier extracted from the vault URL
  * @returns The `https://<clusterId>.vault.skyflowapis.com` base URL
  */

@@ -55,6 +55,16 @@ export async function handleReIdentifyFile(
       plainTextEntities,
     } = args;
 
+    // Validate entity names up front (throws on unknown entities) — before any
+    // file download, so an invalid entity fails fast instead of after the fetch.
+    // The DetectEntities enum value is exactly the string the reidentify API
+    // expects for its redacted/masked/plaintext format arrays.
+    const format = {
+      redacted: redactedEntities?.map((e) => getEntityEnum(e) as string),
+      masked: maskedEntities?.map((e) => getEntityEnum(e) as string),
+      plaintext: plainTextEntities?.map((e) => getEntityEnum(e) as string),
+    };
+
     const resolved = await resolveFileInput({ fileUrl, fileDataBase64, fileName });
 
     if (!isReidentifyFileFormat(resolved.extension)) {
@@ -68,13 +78,6 @@ export async function handleReIdentifyFile(
         isError: true,
       };
     }
-
-    // Validate entity names up front (throws on unknown entities)
-    const format = {
-      redacted: redactedEntities?.map((e) => getEntityEnum(e) as string),
-      masked: maskedEntities?.map((e) => getEntityEnum(e) as string),
-      plaintext: plainTextEntities?.map((e) => getEntityEnum(e) as string),
-    };
 
     const result = await reidentifyFileRest(
       context,

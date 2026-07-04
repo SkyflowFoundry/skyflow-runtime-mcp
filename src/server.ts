@@ -513,11 +513,14 @@ const anonymousRateLimiter = createAnonymousRateLimiter(
   getAnonymousRateLimitConfig()
 );
 
-// Body parser for the /mcp endpoint. 25MB accommodates base64-encoded files
-// passed inline. It is applied per-route AFTER auth + rate limiting (below) so
-// an unauthenticated/over-limit client can't force the server to buffer a large
+// Body parser for the /mcp endpoint. The 34MB limit is sized so an inline
+// fileDataBase64 file up to the 25MB decoded cap (base64 inflates ~33%, plus
+// JSON envelope) fits and fails with the clean FileSourceError rather than a
+// generic PayloadTooLargeError — keeping the inline and URL-download limits
+// consistent. It is applied per-route AFTER auth + rate limiting (below) so an
+// unauthenticated/over-limit client can't force the server to buffer a large
 // body before its credentials are checked.
-const parseMcpBody = express.json({ limit: "25mb" });
+const parseMcpBody = express.json({ limit: "34mb" });
 
 // Extend Express Request type to include custom properties
 declare global {

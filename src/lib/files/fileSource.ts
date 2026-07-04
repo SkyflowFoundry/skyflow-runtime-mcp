@@ -203,6 +203,22 @@ function fileNameFromUrl(url: URL): string | undefined {
   }
 }
 
+/**
+ * Map a download error to a FileSourceError with a friendly reason. Passes an
+ * existing FileSourceError through unchanged (e.g. the size-cap abort) and
+ * translates a timeout AbortError into the intended "timed out" message.
+ */
+function downloadFailure(error: unknown): FileSourceError {
+  if (error instanceof FileSourceError) return error;
+  const reason =
+    error instanceof Error && error.name === "AbortError"
+      ? `download timed out after ${DOWNLOAD_TIMEOUT_MS / 1000}s`
+      : error instanceof Error
+        ? error.message
+        : "unknown network error";
+  return new FileSourceError(`Failed to download fileUrl: ${reason}`);
+}
+
 /** Read a response body into a Buffer, aborting if it exceeds the size cap. */
 async function readBodyWithCap(
   response: Response,
@@ -270,13 +286,7 @@ export async function downloadFileFromUrl(fileUrl: string): Promise<{
           redirect: "manual",
         });
       } catch (error) {
-        const reason =
-          error instanceof Error && error.name === "AbortError"
-            ? `download timed out after ${DOWNLOAD_TIMEOUT_MS / 1000}s`
-            : error instanceof Error
-              ? error.message
-              : "unknown network error";
-        throw new FileSourceError(`Failed to download fileUrl: ${reason}`);
+        throw downloadFailure(error);
       }
 
       // Manual redirect handling: re-validate the destination host each hop.
@@ -314,7 +324,14 @@ export async function downloadFileFromUrl(fileUrl: string): Promise<{
         );
       }
 
-      const buffer = await readBodyWithCap(response, controller);
+      // Mapped so a timeout *during* the body read reports "timed out" rather
+      // than a raw AbortError (the size-cap FileSourceError passes through).
+      let buffer: Buffer;
+      try {
+        buffer = await readBodyWithCap(response, controller);
+      } catch (error) {
+        throw downloadFailure(error);
+      }
       const contentType = response.headers.get("content-type") ?? undefined;
       const fileName =
         fileNameFromContentDisposition(response.headers.get("content-disposition")) ??

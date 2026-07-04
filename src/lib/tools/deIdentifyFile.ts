@@ -113,6 +113,14 @@ export async function handleDeIdentifyFile(
       waitTimeSeconds,
     } = args;
 
+    // Validate entity args up front (getEntityEnum throws on unknown entities)
+    // so an invalid entity fails fast, before any file download.
+    const entityEnums =
+      entities && entities.length > 0 ? entities.map((e) => getEntityEnum(e)) : undefined;
+    const dateShiftEntityEnums = dateShift
+      ? dateShift.entities.map((e) => getEntityEnum(e))
+      : undefined;
+
     // Resolve URL or base64 input into the base64 payload Skyflow requires
     const resolved = await resolveFileInput({ fileUrl, fileDataBase64, fileName });
 
@@ -145,9 +153,8 @@ export async function handleDeIdentifyFile(
     // Configure DeidentifyFileOptions
     const options = new DeidentifyFileOptions();
 
-    // Set entities if provided - use type-safe mapping
-    if (entities && entities.length > 0) {
-      const entityEnums = entities.map((e) => getEntityEnum(e));
+    // Set entities if provided (validated above)
+    if (entityEnums) {
       options.setEntities(entityEnums);
     }
 
@@ -218,7 +225,7 @@ export async function handleDeIdentifyFile(
         transformations.setShiftDays({
           min: dateShift.minDays,
           max: dateShift.maxDays,
-          entities: dateShift.entities.map((e) => getEntityEnum(e)),
+          entities: dateShiftEntityEnums!,
         });
         options.setTransformations(transformations);
       } else {
