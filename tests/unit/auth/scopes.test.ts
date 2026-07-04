@@ -22,6 +22,24 @@ describe("enterprise scope enforcement", () => {
       expect(parseGrantedScopes("")).toEqual([]);
       expect(parseGrantedScopes("  ")).toEqual([]);
     });
+
+    it("ignores standard OIDC identity scopes (no tool policy implied)", () => {
+      // A default "openid profile email" grant must not deny every tool
+      expect(parseGrantedScopes("openid profile email")).toBeUndefined();
+      expect(parseGrantedScopes("openid offline_access")).toBeUndefined();
+    });
+
+    it("strips identity scopes but keeps tool scopes when mixed", () => {
+      expect(parseGrantedScopes("openid profile de-identify")).toEqual([
+        "de-identify",
+      ]);
+    });
+
+    it("keeps unrecognized custom scopes (fail closed at enforcement)", () => {
+      expect(parseGrantedScopes("openid mcp:de-identify")).toEqual([
+        "mcp:de-identify",
+      ]);
+    });
   });
 
   describe("isToolPermitted()", () => {

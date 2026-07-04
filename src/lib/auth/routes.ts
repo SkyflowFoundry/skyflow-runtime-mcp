@@ -93,6 +93,20 @@ export function createProtectedResourceMetadataHandler(
   return (req: Request, res: Response) => {
     const config = configForRequest(res, deps.env ?? process.env);
     if (!config) return;
+    // RFC 9728: the path suffix must correspond to the resource's path
+    // component — the bare URL and the configured resource path are the
+    // only valid metadata locations.
+    const resourcePath = new URL(config.resource).pathname;
+    const validPaths = new Set([
+      "/.well-known/oauth-protected-resource",
+      `/.well-known/oauth-protected-resource${resourcePath === "/" ? "" : resourcePath}`,
+    ]);
+    if (!validPaths.has(req.path)) {
+      return res.status(404).json({
+        error: "not_found",
+        error_description: "No protected resource metadata at this path",
+      });
+    }
     res.json({
       resource: config.resource,
       authorization_servers: [config.issuer],

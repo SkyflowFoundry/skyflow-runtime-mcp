@@ -12,8 +12,29 @@
  */
 
 /**
+ * Standard OIDC identity scopes. IdPs commonly include these in every grant
+ * (they describe identity data, not tool policy), so they are ignored when
+ * deciding tool access — otherwise a default "openid profile email" claim
+ * would silently deny every tool.
+ */
+const OIDC_IDENTITY_SCOPES = new Set([
+  "openid",
+  "profile",
+  "email",
+  "address",
+  "phone",
+  "offline_access",
+]);
+
+/**
  * Parse the space-delimited scope claim from an enterprise access token.
- * Returns undefined when no scope claim was present (= unrestricted).
+ *
+ * - No scope claim → undefined (unrestricted)
+ * - Claim with only standard OIDC identity scopes → undefined (they carry
+ *   no tool policy; connection-level gating was intended)
+ * - Empty claim ("") → [] (explicit deny-all)
+ * - Anything else → the non-identity scope values; unrecognized custom
+ *   scopes deny tools (fail closed) with an error naming what was granted
  */
 export function parseGrantedScopes(
   scope: string | undefined
@@ -21,7 +42,12 @@ export function parseGrantedScopes(
   if (scope === undefined) {
     return undefined;
   }
-  return scope.split(" ").filter((s) => s.length > 0);
+  const values = scope.split(" ").filter((s) => s.length > 0);
+  const toolScopes = values.filter((s) => !OIDC_IDENTITY_SCOPES.has(s));
+  if (values.length > 0 && toolScopes.length === 0) {
+    return undefined;
+  }
+  return toolScopes;
 }
 
 /**

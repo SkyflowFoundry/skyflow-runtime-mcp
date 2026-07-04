@@ -66,13 +66,14 @@ Misconfiguration fails **closed**: if the feature is enabled but required variab
 Scopes let IdP administrators control *which tools* a user or client may invoke, not just whether they can connect. The IdP grants scopes in the ID-JAG (per admin policy), the `/token` endpoint copies them into the access token, and the server enforces them per tool call:
 
 - **Scope values name tools**: grant `de-identify` and/or `re-identify`.
-- **A token with a `scope` claim** may only invoke the named tools; other tools return an `insufficient_scope` error result.
+- **A token with tool scopes** may only invoke the named tools; other tools return an `insufficient_scope` error result naming the granted scopes.
 - **A token without a `scope` claim** is unrestricted — access is gated at the connection level only.
+- **Standard OIDC identity scopes are ignored** (`openid`, `profile`, `email`, `address`, `phone`, `offline_access`): they describe identity data, not tool policy, so an IdP's default `openid profile email` grant does not deny every tool. A claim of *only* identity scopes behaves like no claim at all.
 - **`tools/list` is not filtered by scope**: every tool stays visible to every connection (the tool registry is shared across requests); enforcement happens at invocation time with a clear `insufficient_scope` error.
 
 For example, an Okta policy granting the `de-identify` scope to the "support" group lets those users redact text but never restore original PII, while the "compliance" group gets both scopes.
 
-> **Known assumption to verify against your IdP:** scope values must match tool names *exactly* — configure your IdP to issue the literal scopes `de-identify` and `re-identify`. Some IdPs default to namespaced or audience-qualified scope strings (e.g. `mcp:de-identify`); those will not match and will deny the tool. If your IdP cannot issue bare scope names, omit the scope grant entirely (unrestricted) until a mapping layer is added. This is one of the items to validate when wiring up a live Okta org.
+> **Known assumption to verify against your IdP:** tool scope values must match tool names *exactly* — configure your IdP to issue the literal scopes `de-identify` and `re-identify`. Standard OIDC identity scopes are filtered out harmlessly, but namespaced or audience-qualified custom scopes (e.g. `mcp:de-identify`) will not match and will deny tools (fail closed, with the granted scopes named in the error). If your IdP cannot issue bare scope names, omit custom scope grants entirely (unrestricted) until a mapping layer is added. This is one of the items to validate when wiring up a live Okta org.
 
 ## Skyflow vault credentials under enterprise auth
 

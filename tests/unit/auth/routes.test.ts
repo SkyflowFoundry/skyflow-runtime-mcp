@@ -22,7 +22,13 @@ import {
 } from "./helpers";
 
 function createMockRequest(overrides: Partial<Request> = {}): Request {
-  return { headers: {}, query: {}, body: {}, ...overrides } as Request;
+  return {
+    headers: {},
+    query: {},
+    body: {},
+    path: "/.well-known/oauth-protected-resource",
+    ...overrides,
+  } as Request;
 }
 
 interface MockResponse {
@@ -124,6 +130,31 @@ describe("protected resource metadata endpoint", () => {
       authorization_servers: [TEST_ISSUER],
       bearer_methods_supported: ["header"],
     });
+  });
+
+  it("serves the RFC 9728 path-suffixed metadata URL for the resource path", () => {
+    const mock = createMockResponse();
+    createProtectedResourceMetadataHandler({ env: enabledEnv() })(
+      createMockRequest({
+        path: "/.well-known/oauth-protected-resource/mcp",
+      } as Partial<Request>),
+      mock.res,
+      vi.fn()
+    );
+    expect(mock.statusCode).toBe(200);
+    expect(mock.jsonBody.resource).toBe(TEST_RESOURCE);
+  });
+
+  it("returns 404 for a path suffix that is not the resource path", () => {
+    const mock = createMockResponse();
+    createProtectedResourceMetadataHandler({ env: enabledEnv() })(
+      createMockRequest({
+        path: "/.well-known/oauth-protected-resource/wrong",
+      } as Partial<Request>),
+      mock.res,
+      vi.fn()
+    );
+    expect(mock.statusCode).toBe(404);
   });
 });
 
