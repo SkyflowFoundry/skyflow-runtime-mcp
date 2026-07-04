@@ -130,6 +130,13 @@ export async function handleGetFileRunStatus(
     // success-shaped response with no processed file.
     if (run.status !== "SUCCESS") {
       output.note = stillProcessingNote(runId);
+    } else if (!output.processedFileData && !output.detectedEntities) {
+      // Completed, but with no file/entity artifact (e.g. output options that
+      // produce no file were requested). Say so explicitly so a caller doesn't
+      // read the empty-but-successful response as a lost result.
+      output.note =
+        `Run ${runId} completed successfully but returned no processed file or detected entities. ` +
+        `This can happen when no file-producing output option was requested.`;
     }
 
     return { output };

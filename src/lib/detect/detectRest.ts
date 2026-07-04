@@ -83,6 +83,9 @@ async function detectFetch(
   path: string,
   init: { method: string; body?: unknown }
 ): Promise<Record<string, unknown>> {
+  // The bearer credential is the caller's own and is only ever sent to the
+  // caller-specified vault URL (validated per request, same vault the SDK path
+  // targets) — never to a host derived from user-supplied file input.
   const baseUrl = context.vaultUrl.replace(/\/+$/, "");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

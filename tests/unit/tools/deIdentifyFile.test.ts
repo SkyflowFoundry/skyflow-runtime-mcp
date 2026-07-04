@@ -510,6 +510,34 @@ describe("handleDeIdentifyFile", () => {
       expect(output.mimeType).toBeUndefined();
     });
 
+    it("should attach a polling note for a runId with a non-SUCCESS status", async () => {
+      const skyflow = createMockSkyflow({
+        runId: "run_pending_789",
+        status: "PENDING",
+      });
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
+
+      expect(output.runId).toBe("run_pending_789");
+      expect(output.status).toBe("PENDING");
+      expect(output.note).toContain("get-file-run-status");
+    });
+
+    it("should not attach a polling note for a completed run with a runId", async () => {
+      const skyflow = createMockSkyflow({
+        runId: "run_done_1",
+        status: "SUCCESS",
+        fileBase64: "base64data",
+        extension: "png",
+      });
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
+
+      expect(output.runId).toBe("run_done_1");
+      expect(output.status).toBe("SUCCESS");
+      expect(output.note).toBeUndefined();
+    });
+
     it("should omit optional fields when not in response", async () => {
       const skyflow = createMockSkyflow({});
       const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);

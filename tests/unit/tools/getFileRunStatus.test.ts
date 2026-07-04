@@ -155,6 +155,21 @@ describe("handleGetFileRunStatus", () => {
     expect(output.note).toContain("get-file-run-status");
   });
 
+  it("explains a SUCCESS run that returned no file or entities", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ status: "SUCCESS", output: [] }))
+    );
+
+    const result = await handleGetFileRunStatus({ runId: "run1" }, context, false);
+    const output = result.output as DeIdentifyFileOutput;
+
+    expect(result.isError).toBeUndefined();
+    expect(output.status).toBe("SUCCESS");
+    expect(output.processedFileData).toBeUndefined();
+    expect(output.note).toContain("no processed file");
+  });
+
   it("attaches a polling note for non-terminal/unknown statuses", async () => {
     vi.stubGlobal(
       "fetch",
