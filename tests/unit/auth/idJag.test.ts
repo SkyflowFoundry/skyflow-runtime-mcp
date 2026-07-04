@@ -117,6 +117,24 @@ describe("validateIdJag()", () => {
       );
     });
 
+    it("rejects an ID-JAG without an exp claim (would otherwise never expire)", async () => {
+      const assertion = await idp.signIdJag({ exp: undefined });
+      await expectOAuthError(
+        validateIdJag(assertion, testConfig(), idp.keyResolver),
+        "invalid_grant",
+        /exp/
+      );
+    });
+
+    it("rejects an ID-JAG without an iat claim", async () => {
+      const assertion = await idp.signIdJag({ iat: undefined });
+      await expectOAuthError(
+        validateIdJag(assertion, testConfig(), idp.keyResolver),
+        "invalid_grant",
+        /iat/
+      );
+    });
+
     it("rejects an expired ID-JAG", async () => {
       const now = Math.floor(Date.now() / 1000);
       const assertion = await idp.signIdJag({ iat: now - 600, exp: now - 300 });

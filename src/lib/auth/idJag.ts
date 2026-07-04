@@ -234,6 +234,9 @@ export async function validateIdJag(
       typ: ID_JAG_TYP,
       algorithms: ALLOWED_ID_JAG_ALGORITHMS,
       clockTolerance: CLOCK_TOLERANCE_SECONDS,
+      // jose only validates exp/iat when present — require them so a grant
+      // without an expiry can never pass as eternally valid.
+      requiredClaims: ["exp", "iat", "sub", "jti"],
     });
     payload = result.payload;
   } catch (error) {

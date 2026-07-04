@@ -168,13 +168,14 @@ export function createTokenEndpointRateLimiter(config: RateLimiterConfig) {
 export function getTokenEndpointRateLimitConfig(
   env: NodeJS.ProcessEnv = process.env
 ): RateLimiterConfig {
-  const maxRequests = parseInt(
-    env.ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS || "30",
-    10
+  // Strict digits-only parse: parseInt would silently accept "30abc"
+  const parseStrict = (raw: string): number =>
+    /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+  const maxRequests = parseStrict(
+    (env.ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS || "30").trim()
   );
-  const windowMs = parseInt(
-    env.ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS || "60000",
-    10
+  const windowMs = parseStrict(
+    (env.ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS || "60000").trim()
   );
 
   if (isNaN(maxRequests) || maxRequests <= 0) {

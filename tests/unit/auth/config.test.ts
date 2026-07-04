@@ -133,6 +133,14 @@ describe("loadEnterpriseAuthConfig()", () => {
         )
       ).toThrow(/positive integer/);
     });
+
+    it("throws on a token TTL with trailing garbage", () => {
+      expect(() =>
+        loadEnterpriseAuthConfig(
+          enabledEnv({ ENTERPRISE_TOKEN_TTL_SECONDS: "900abc" })
+        )
+      ).toThrow(/positive integer/);
+    });
   });
 
   describe("overrides", () => {

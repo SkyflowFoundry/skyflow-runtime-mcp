@@ -123,7 +123,9 @@ export function loadEnterpriseAuthConfig(
 
   // Short default: leaked bearer tokens stay usable until expiry, and
   // clients can re-exchange an ID-JAG without user interaction anyway.
-  const tokenTtlSeconds = parseInt(env.ENTERPRISE_TOKEN_TTL_SECONDS || "900", 10);
+  // Strict digits-only parse: parseInt would silently accept "900abc".
+  const ttlRaw = (env.ENTERPRISE_TOKEN_TTL_SECONDS || "900").trim();
+  const tokenTtlSeconds = /^\d+$/.test(ttlRaw) ? parseInt(ttlRaw, 10) : NaN;
   if (isNaN(tokenTtlSeconds) || tokenTtlSeconds <= 0) {
     throw new EnterpriseAuthConfigError(
       "ENTERPRISE_TOKEN_TTL_SECONDS must be a positive integer"

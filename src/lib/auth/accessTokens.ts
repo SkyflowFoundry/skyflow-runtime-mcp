@@ -76,6 +76,11 @@ export async function issueAccessToken(
  * Verify an enterprise access token presented on an /mcp request.
  * Checks signature, issuer, audience (MCP resource identifier), typ, and expiry.
  *
+ * The client allowlist is deliberately enforced only at issuance (/token) —
+ * an already-issued token stays valid until expiry even if its client is
+ * removed from ENTERPRISE_ALLOWED_CLIENT_IDS; the short default TTL bounds
+ * that staleness window.
+ *
  * @throws jose errors when the token is invalid
  */
 export async function verifyAccessToken(
@@ -88,6 +93,8 @@ export async function verifyAccessToken(
     typ: ACCESS_TOKEN_TYP,
     algorithms: ["HS256"],
     clockTolerance: CLOCK_TOLERANCE_SECONDS,
+    // Defensive: issued tokens always carry these, but never accept one without
+    requiredClaims: ["exp", "sub"],
   });
 
   if (typeof payload.sub !== "string" || payload.sub.length === 0) {

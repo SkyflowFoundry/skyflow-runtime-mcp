@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decodeJwt, decodeProtectedHeader } from "jose";
+import { decodeJwt, decodeProtectedHeader, SignJWT } from "jose";
 import {
   issueAccessToken,
   verifyAccessToken,
@@ -119,6 +119,21 @@ describe("enterprise access tokens", () => {
       await expect(
         verifyAccessToken("sky-api-key-123", testConfig())
       ).rejects.toThrow();
+    });
+
+    it("rejects a token without an exp claim", async () => {
+      // Hand-crafted with the right secret/typ/iss/aud but no expiry
+      const secret = new TextEncoder().encode(testConfig().signingKey);
+      const eternal = await new SignJWT({})
+        .setProtectedHeader({ alg: "HS256", typ: ACCESS_TOKEN_TYP })
+        .setIssuer(testConfig().issuer)
+        .setAudience(testConfig().resource)
+        .setSubject("user-1")
+        .setIssuedAt()
+        .sign(secret);
+      await expect(
+        verifyAccessToken(eternal, testConfig())
+      ).rejects.toThrow(/exp/);
     });
   });
 

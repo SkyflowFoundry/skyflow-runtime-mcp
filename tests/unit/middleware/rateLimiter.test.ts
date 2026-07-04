@@ -393,6 +393,14 @@ describe("Token Endpoint Rate Limiter", () => {
         } as NodeJS.ProcessEnv)
       ).toThrow(/positive integer/);
     });
+
+    it("should throw on values with trailing garbage", () => {
+      expect(() =>
+        getTokenEndpointRateLimitConfig({
+          ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS: "30abc",
+        } as NodeJS.ProcessEnv)
+      ).toThrow(/positive integer/);
+    });
   });
 
   describe("createTokenEndpointRateLimiter()", () => {
