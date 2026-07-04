@@ -171,7 +171,10 @@ export function createEnterpriseAuthMiddleware(
     }
 
     // In optional mode, bearer values not issued by this server (Skyflow
-    // JWTs, API keys) flow through to the ordinary credential chain.
+    // JWTs, API keys) flow through to the ordinary credential chain. A token
+    // whose iss CLAIMS to be this server but fails verification is
+    // deliberately rejected below rather than falling through — a spoofed
+    // issuer must never demote into the Skyflow credential path.
     if (config.mode === "optional" && !looksLikeEnterpriseToken(token, config)) {
       return next();
     }

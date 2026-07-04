@@ -412,6 +412,38 @@ describe("Token Endpoint Rate Limiter", () => {
       );
     });
 
+    it("should isolate distinct client IPs from each other", () => {
+      const rateLimiter = createTokenEndpointRateLimiter({
+        maxRequests: 1,
+        windowMs: 60000,
+      });
+
+      // Exhaust the limit for the first client
+      rateLimiter(
+        createMockRequest({ ip: "10.0.0.1" }) as Request,
+        createMockResponse().res as Response,
+        vi.fn()
+      );
+      const blocked = createMockResponse();
+      const blockedNext = vi.fn();
+      rateLimiter(
+        createMockRequest({ ip: "10.0.0.1" }) as Request,
+        blocked.res as Response,
+        blockedNext
+      );
+      expect(blockedNext).not.toHaveBeenCalled();
+      expect(blocked.statusCode).toBe(429);
+
+      // A different client IP is unaffected
+      const next = vi.fn();
+      rateLimiter(
+        createMockRequest({ ip: "10.0.0.2" }) as Request,
+        createMockResponse().res as Response,
+        next
+      );
+      expect(next).toHaveBeenCalled();
+    });
+
     it("should track clients independently of the anonymous limiter", () => {
       const tokenLimiter = createTokenEndpointRateLimiter({
         maxRequests: 1,

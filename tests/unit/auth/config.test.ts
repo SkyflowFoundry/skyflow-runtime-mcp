@@ -37,7 +37,7 @@ describe("loadEnterpriseAuthConfig()", () => {
       expect(config!.resource).toBe(`${TEST_ISSUER}/mcp`);
       expect(config!.idpAudience).toBe(TEST_ISSUER);
       expect(config!.mode).toBe("required");
-      expect(config!.tokenTtlSeconds).toBe(3600);
+      expect(config!.tokenTtlSeconds).toBe(900);
       expect(config!.allowedClientIds).toEqual([]);
       expect(config!.idpJwksUri).toBeUndefined();
     });

@@ -54,7 +54,7 @@ All three return 404 when the feature is disabled. Unauthenticated `/mcp` reques
 | `ENTERPRISE_IDP_AUDIENCE` | no | Expected `aud` of ID-JAGs, if your IdP is configured with an audience other than `ENTERPRISE_AUTH_ISSUER`. |
 | `ENTERPRISE_MCP_RESOURCE` | no | RFC 9728 resource identifier of the MCP endpoint. Defaults to `{ENTERPRISE_AUTH_ISSUER}/mcp`. Issued tokens are audience-restricted to this value. |
 | `ENTERPRISE_ALLOWED_CLIENT_IDS` | no | Comma-separated allowlist of MCP client IDs (matched against the ID-JAG `client_id` claim). Empty = any client the IdP authorizes. |
-| `ENTERPRISE_TOKEN_TTL_SECONDS` | no | Lifetime of issued access tokens. Default 3600. |
+| `ENTERPRISE_TOKEN_TTL_SECONDS` | no | Lifetime of issued access tokens. Default 900 (15 minutes) — clients re-exchange their ID-JAG without user interaction, so short lifetimes cost nothing and bound the exposure of a leaked token. |
 | `ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS` | no | Max `/token` requests per client IP per window. Default 30. |
 | `ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS` | no | `/token` rate limit window in milliseconds. Default 60000. |
 | `SKYFLOW_API_KEY` | no | Server-side Skyflow service credential used for vault access on requests authenticated via enterprise auth (see below). |

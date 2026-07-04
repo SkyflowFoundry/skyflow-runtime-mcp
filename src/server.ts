@@ -226,6 +226,21 @@ try {
     console.log(
       `Enterprise-managed authorization enabled (${enterpriseConfig.mode} mode, IdP: ${enterpriseConfig.idpIssuer})`
     );
+    if (enterpriseConfig.mode === "required") {
+      console.log(
+        "Enterprise auth mode is 'required': /mcp requests carrying direct Skyflow credentials " +
+          "in the Authorization header will be rejected with 401. Set ENTERPRISE_AUTH_MODE=optional " +
+          "to keep accepting them alongside enterprise tokens."
+      );
+    }
+    if (!process.env.SKYFLOW_API_KEY && process.env.ANON_MODE_API_KEY) {
+      console.warn(
+        "Enterprise auth is enabled without SKYFLOW_API_KEY while anonymous mode is configured: " +
+          "enterprise-authenticated requests that carry no Skyflow credentials will degrade to " +
+          "anonymous mode (non-persisted tokens, re-identify unavailable). Set SKYFLOW_API_KEY " +
+          "to give enterprise users real vault access."
+      );
+    }
   }
 } catch (error) {
   console.error(

@@ -212,7 +212,7 @@ describe("token endpoint", () => {
 
     expect(mock.statusCode).toBe(200);
     expect(mock.jsonBody.token_type).toBe("Bearer");
-    expect(mock.jsonBody.expires_in).toBe(3600);
+    expect(mock.jsonBody.expires_in).toBe(900);
     expect(mock.jsonBody.scope).toBe("de-identify re-identify");
     expect(mock.headers["cache-control"]).toBe("no-store");
 
