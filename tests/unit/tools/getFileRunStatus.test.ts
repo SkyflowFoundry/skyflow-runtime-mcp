@@ -219,6 +219,36 @@ describe("handleGetFileRunStatus", () => {
     }
   });
 
+  it("long-polls through a non-IN_PROGRESS pending status until success", async () => {
+    vi.useFakeTimers();
+    try {
+      let call = 0;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          call += 1;
+          return call < 2
+            ? jsonResponse({ status: "PENDING", output: [] })
+            : jsonResponse({
+                status: "SUCCESS",
+                output: [{ processedFile: "ZG9uZQ==", processedFileType: "redacted_file", processedFileExtension: "txt" }],
+              });
+        })
+      );
+
+      const promise = handleGetFileRunStatus({ runId: "run1", waitSeconds: 30 }, context, false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await promise;
+      const output = result.output as DeIdentifyFileOutput;
+
+      expect(call).toBe(2);
+      expect(output.status).toBe("SUCCESS");
+      expect(output.processedFileData).toBe("ZG9uZQ==");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns isError with the Skyflow message for failed runs", async () => {
     vi.stubGlobal(
       "fetch",

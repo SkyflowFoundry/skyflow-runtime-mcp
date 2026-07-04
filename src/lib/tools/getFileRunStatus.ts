@@ -103,7 +103,11 @@ export async function handleGetFileRunStatus(
     let pollDelayMs = 2000;
     let run = await getDetectRunRest(context, runId);
 
-    while (run.status === "IN_PROGRESS" && Date.now() < deadline) {
+    // Keep polling through any non-terminal status (IN_PROGRESS, or another
+    // non-standard label like PENDING/RUNNING), not just the exact "IN_PROGRESS"
+    // string, so waitSeconds actually waits regardless of how Skyflow labels the
+    // in-flight state.
+    while (run.status !== "SUCCESS" && run.status !== "FAILED" && Date.now() < deadline) {
       const remaining = deadline - Date.now();
       await sleep(Math.min(pollDelayMs, remaining));
       pollDelayMs = Math.min(pollDelayMs * 2, 8000);

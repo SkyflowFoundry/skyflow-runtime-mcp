@@ -62,6 +62,25 @@ export function extractClusterId(vaultUrl: string): string | null {
 }
 
 /**
+ * Build the Skyflow vault REST base URL from a clusterId.
+ *
+ * Mirrors the skyflow-node SDK's `getVaultURL(clusterId, Env.PROD)`
+ * (`https://<clusterId>.vault.skyflowapis.com`). Direct Detect REST calls MUST
+ * use this rather than the client-supplied `vaultUrl`: `extractClusterId` only
+ * requires the substring `<id>.vault` to appear anywhere, so a crafted
+ * `vaultUrl` like `https://abc.vault.attacker.com` passes validation. The SDK
+ * builds its host from `clusterId` alone, so deriving the REST base the same
+ * way guarantees both paths hit the same Skyflow host and the bearer credential
+ * is never forwarded to an attacker-controlled domain.
+ *
+ * @param clusterId - The cluster identifier extracted from the vault URL
+ * @returns The `https://<clusterId>.vault.skyflowapis.com` base URL
+ */
+export function getVaultBaseUrl(clusterId: string): string {
+  return `https://${clusterId}.vault.skyflowapis.com`;
+}
+
+/**
  * Validate vault configuration parameters
  * Pure function that returns validation result with error message if invalid
  *

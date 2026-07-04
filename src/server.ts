@@ -19,7 +19,7 @@ import {
 } from "./generated/ui-html.js";
 import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
-import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
+import { validateVaultConfig, looksLikePlaceholder, getVaultBaseUrl } from "./lib/validation/vaultConfig.js";
 import {
   ENTITY_KEYS,
   MASKING_METHOD_KEYS,
@@ -52,6 +52,7 @@ import {
 interface RequestContext {
   skyflow: Skyflow;
   vaultId: string;
+  /** Skyflow REST base URL derived from clusterId (not the client-supplied vaultUrl). */
   vaultUrl: string;
   /** Raw bearer value (JWT or API key) forwarded to Skyflow. Never log this. */
   credentialKey: string;
@@ -588,12 +589,13 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, parseMcpBody, async (
   }
 
   // Use validated config
-  const { vaultId: validatedVaultId, vaultUrl: validatedVaultUrl, clusterId } = validation.config!;
+  const { vaultId: validatedVaultId, clusterId } = validation.config!;
 
-  // Normalize the vault URL for direct REST calls (scheme may be omitted)
-  const normalizedVaultUrl = /^https?:\/\//.test(validatedVaultUrl)
-    ? validatedVaultUrl
-    : `https://${validatedVaultUrl}`;
+  // Base URL for direct Detect REST calls, derived from clusterId the same way
+  // the SDK builds its host — NOT from the client-supplied vaultUrl, which is
+  // only loosely validated. This keeps the bearer credential from ever being
+  // forwarded to a crafted host and keeps the REST and SDK paths on the same vault.
+  const restVaultBaseUrl = getVaultBaseUrl(clusterId);
 
   // Raw bearer value (JWT or API key) for direct Detect REST calls
   const credentialKey =
@@ -636,7 +638,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, parseMcpBody, async (
     {
       skyflow: skyflowInstance,
       vaultId: validatedVaultId,
-      vaultUrl: normalizedVaultUrl,
+      vaultUrl: restVaultBaseUrl,
       credentialKey,
       isAnonymousMode: useAnonymousMode,
     },
