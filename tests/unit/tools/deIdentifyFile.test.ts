@@ -89,6 +89,11 @@ vi.mock("../../../src/lib/mappings/entityMaps", () => ({
   getTranscriptionEnum: vi.fn((type: string) => `ENUM_${type}`),
 }));
 
+// The SSRF guard resolves hostnames; default to a public address for URL tests.
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
 function createMockSkyflow(response: Record<string, unknown> = {}) {
   return {
     detect: vi.fn(() => ({

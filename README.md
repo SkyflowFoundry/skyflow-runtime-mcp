@@ -57,6 +57,9 @@ For a concrete client example, see [Integration with Claude Desktop](#integratio
 
 **Files and async processing**: Skyflow processes files asynchronously. `de-identify-file` waits up to `waitTimeSeconds` (default 25s) for the run to finish — small files usually complete inline. Larger files return a `runId` with `status: "IN_PROGRESS"`; call `get-file-run-status` with that `runId` (optionally with `waitSeconds`) until it reports `SUCCESS`. Because Skyflow's file endpoints only accept base64 content, files passed by URL are downloaded server-side (25 MB limit) and converted before being forwarded — signed URLs (S3/GCS presigned, etc.) work as long as they're reachable from the server.
 
+> [!IMPORTANT]
+> **Deploying with file URL support (SSRF):** the `fileUrl` option makes the server fetch arbitrary user-supplied URLs. The server blocks private/loopback/link-local/metadata addresses (including alternate IP encodings), resolves hostnames and checks every resolved address, and re-validates each redirect hop. This can't fully prevent DNS-rebinding, so if you accept untrusted URLs, **also enforce network egress controls** on the deployment — in particular block the cloud metadata endpoint (`169.254.169.254`). If you don't need URL input, callers can pass `fileDataBase64` instead.
+
 ## Connecting in Authenticated Mode
 
 Authenticated mode forwards your own Skyflow credentials to your vault. Any MCP client that supports Streamable HTTP can connect — the server has no client-specific logic.

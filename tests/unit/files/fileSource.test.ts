@@ -1,10 +1,15 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { lookup } from "node:dns/promises";
 import {
   resolveFileInput,
   downloadFileFromUrl,
   FileSourceError,
   MAX_DOWNLOAD_BYTES,
 } from "../../../src/lib/files/fileSource";
+
+// DNS is resolved by the SSRF guard for hostnames; default to a public address.
+vi.mock("node:dns/promises", () => ({ lookup: vi.fn() }));
+const mockLookup = vi.mocked(lookup);
 
 function stubFetch(response: Response | (() => Promise<Response>)) {
   const impl = typeof response === "function" ? response : async () => response;
@@ -14,8 +19,13 @@ function stubFetch(response: Response | (() => Promise<Response>)) {
 }
 
 describe("fileSource", () => {
+  beforeEach(() => {
+    mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }] as any);
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   describe("resolveFileInput with base64", () => {
@@ -128,6 +138,33 @@ describe("fileSource", () => {
       stubFetch(new Response(Buffer.from("ok"), { status: 200 }));
       const result = await downloadFileFromUrl("https://storage.googleapis.com/b/file.txt");
       expect(result.buffer.toString()).toBe("ok");
+    });
+
+    it.each([
+      "https://127.1/file.txt", // shorthand — new URL normalizes to 127.0.0.1
+      "https://0177.0.0.1/file.txt", // octal — normalizes to 127.0.0.1
+      "https://2852039166/file.txt", // decimal — normalizes to 169.254.169.254
+    ])("blocks shorthand/octal/decimal IP forms %s", async (url) => {
+      stubFetch(new Response(Buffer.from("x"), { status: 200 }));
+      await expect(downloadFileFromUrl(url)).rejects.toThrow(/not allowed/);
+    });
+
+    it("blocks a public hostname that resolves to an internal address (DNS SSRF)", async () => {
+      mockLookup.mockResolvedValue([{ address: "169.254.169.254", family: 4 }] as any);
+      stubFetch(new Response(Buffer.from("secrets"), { status: 200 }));
+
+      await expect(
+        downloadFileFromUrl("https://intake.attacker.example/file.pdf")
+      ).rejects.toThrow(/not allowed/);
+    });
+
+    it("surfaces a DNS resolution failure as a download error", async () => {
+      mockLookup.mockRejectedValue(new Error("ENOTFOUND"));
+      stubFetch(new Response(Buffer.from("x"), { status: 200 }));
+
+      await expect(
+        downloadFileFromUrl("https://nonexistent.example/file.pdf")
+      ).rejects.toThrow(/could not resolve/);
     });
 
     it.each([

@@ -6,6 +6,11 @@ import type {
   ReIdentifyFileErrorOutput,
 } from "../../../src/lib/tools/types";
 
+// The SSRF guard resolves hostnames; default to a public address for URL tests.
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+}));
+
 const context: DetectRestContext = {
   vaultUrl: "https://cluster123.vault.skyflowapis.com",
   vaultId: "vault123",

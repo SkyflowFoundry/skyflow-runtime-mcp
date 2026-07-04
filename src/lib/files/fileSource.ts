@@ -1,3 +1,4 @@
+import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import {
   extensionFromFileName,
@@ -107,14 +108,25 @@ function ipLiteralFromHostname(hostname: string): string | null {
   return null;
 }
 
+const NOT_ALLOWED = (hostname: string) =>
+  new FileSourceError(
+    `fileUrl host "${hostname}" is not allowed. URLs must point to a publicly reachable file (e.g. a signed S3/GCS URL).`
+  );
+
 /**
- * Reject hosts that must not be downloaded from. This is a best-effort guard
- * against obvious SSRF targets (loopback, private ranges, cloud metadata) in
- * their common literal encodings. It does NOT resolve DNS, so a public
- * hostname whose A record points at an internal address is not caught here —
- * rely on network egress controls for that.
+ * Reject hosts that must not be downloaded from: loopback, private ranges,
+ * link-local/cloud-metadata, and CGNAT, in their common literal encodings AND
+ * by resolving hostnames so a public name whose A/AAAA record points at an
+ * internal address is also blocked (the primary SSRF risk for a
+ * fetch-arbitrary-URL feature).
+ *
+ * Note: DNS is resolved here at check time; a determined attacker controlling
+ * their own DNS could still rebind between this lookup and fetch's own
+ * resolution (TOCTOU). Closing that fully requires pinning the connection to
+ * the validated IP — deployments handling untrusted URLs should also enforce
+ * network egress controls to a metadata endpoint.
  */
-function assertHostAllowed(hostname: string): void {
+async function assertHostAllowed(hostname: string): Promise<void> {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
 
   if (
@@ -123,16 +135,26 @@ function assertHostAllowed(hostname: string): void {
     host.endsWith(".local") ||
     host.endsWith(".internal")
   ) {
-    throw new FileSourceError(
-      `fileUrl host "${hostname}" is not allowed. URLs must point to a publicly reachable file (e.g. a signed S3/GCS URL).`
-    );
+    throw NOT_ALLOWED(hostname);
   }
 
+  // IP literal (in any encoding — new URL() normalizes shorthand/octal/decimal
+  // forms to dotted-quad before we see the hostname).
   const ipLiteral = ipLiteralFromHostname(host);
-  if (ipLiteral && isBlockedIp(ipLiteral)) {
-    throw new FileSourceError(
-      `fileUrl host "${hostname}" is not allowed. URLs must point to a publicly reachable file (e.g. a signed S3/GCS URL).`
-    );
+  if (ipLiteral) {
+    if (isBlockedIp(ipLiteral)) throw NOT_ALLOWED(hostname);
+    return;
+  }
+
+  // Hostname: resolve and reject if any resolved address is non-public.
+  let addresses: { address: string }[];
+  try {
+    addresses = await lookup(host, { all: true });
+  } catch {
+    throw new FileSourceError(`Failed to download fileUrl: could not resolve host "${hostname}".`);
+  }
+  if (addresses.some(({ address }) => isBlockedIp(address))) {
+    throw NOT_ALLOWED(hostname);
   }
 }
 
@@ -239,7 +261,7 @@ export async function downloadFileFromUrl(fileUrl: string): Promise<{
 
   try {
     for (let redirects = 0; ; redirects++) {
-      assertHostAllowed(url.hostname);
+      await assertHostAllowed(url.hostname);
 
       let response: Response;
       try {
