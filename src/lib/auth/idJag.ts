@@ -78,7 +78,12 @@ let cachedRemoteJwks: { uri: string; resolver: JWTVerifyGetKey } | null = null;
 
 /**
  * Discover the IdP's JWKS URI from its OIDC discovery document.
- * Results are cached for the lifetime of the process.
+ *
+ * Results are cached for the lifetime of the process: key ROTATION happens
+ * at a stable jwks_uri (createRemoteJWKSet refetches keys as needed), while
+ * relocating the jwks_uri itself is a rare IdP reconfiguration — set
+ * ENTERPRISE_IDP_JWKS_URI explicitly or restart if that ever happens.
+ * Serverless instance recycling bounds the staleness in practice.
  */
 async function discoverJwksUri(idpIssuer: string): Promise<string> {
   const cached = discoveredJwksUris.get(idpIssuer);

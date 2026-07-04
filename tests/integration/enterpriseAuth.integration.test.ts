@@ -273,6 +273,27 @@ describe("enterprise auth HTTP flow (integration)", () => {
     }
   });
 
+  it("honors the apiKey query parameter in required mode (no SKYFLOW_API_KEY)", async () => {
+    // Locks in the handoff: the enterprise middleware leaves credentials
+    // unresolved and authenticateBearer consumes the query parameter
+    const { body } = await exchangeToken(await signIdJag());
+    delete process.env.SKYFLOW_API_KEY;
+    try {
+      const res = await fetch(`${baseUrl}/mcp?apiKey=sky-param-key`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+          authorization: `Bearer ${body.access_token}`,
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 9 }),
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      process.env.SKYFLOW_API_KEY = "sky-integration-dummy-key";
+    }
+  });
+
   it("lets legacy Skyflow credentials fall through in optional mode", async () => {
     process.env.ENTERPRISE_AUTH_MODE = "optional";
     try {
