@@ -16,6 +16,7 @@ const tools = [
   { varName: "deIdentifyHtml", dir: "de-identify" },
   { varName: "reIdentifyHtml", dir: "re-identify" },
   { varName: "deIdentifyFileHtml", dir: "de-identify-file" },
+  { varName: "reIdentifyFileHtml", dir: "re-identify-file" },
 ] as const;
 
 function escapeForTemplateLiteral(s: string): string {

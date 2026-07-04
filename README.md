@@ -7,6 +7,7 @@ A remote MCP server for connecting to a Skyflow Vault for sensitive PII data det
 
 - [Skyflow Runtime MCP](#skyflow-runtime-mcp)
   - [Try it out online](#try-it-out-online)
+  - [Available Tools](#available-tools)
   - [Connecting in Authenticated Mode](#connecting-in-authenticated-mode)
     - [Connection Contract](#connection-contract)
     - [Minimal Example (curl)](#minimal-example-curl)
@@ -28,6 +29,8 @@ A remote MCP server for connecting to a Skyflow Vault for sensitive PII data det
     - [List Available Tools](#list-available-tools)
     - [Call the De-identify Tool](#call-the-de-identify-tool)
     - [Call the Re-identify Tool](#call-the-re-identify-tool)
+    - [De-identify a File](#de-identify-a-file)
+    - [Re-identify a File](#re-identify-a-file)
   - [Integration with Claude Desktop](#integration-with-claude-desktop)
     - [Local Development](#local-development)
     - [Remote Connection (Recommended)](#remote-connection-recommended)
@@ -41,6 +44,18 @@ A remote MCP server for connecting to a Skyflow Vault for sensitive PII data det
 This remote MCP server is hosted at `https://pii-mcp.dev/mcp`. Connect using your own Skyflow credentials — see [Connecting in Authenticated Mode](#connecting-in-authenticated-mode) for the contract, or [Anonymous Mode](#anonymous-mode-try-before-you-buy) to try it without credentials.
 
 For a concrete client example, see [Integration with Claude Desktop](#integration-with-claude-desktop).
+
+## Available Tools
+
+| Tool | What it does |
+|------|--------------|
+| `de-identify` | Detects and replaces sensitive data in text with tokens. |
+| `re-identify` | Restores original sensitive data from tokenized text. |
+| `de-identify-file` | Detects and redacts sensitive data in files — images (jpg, png, bmp, tif), PDFs, Word/Excel/PowerPoint, txt, csv, json, xml, dcm, and audio (mp3, wav). Pass the file as a signed/public URL (`fileUrl`) or inline base64 (`fileDataBase64` + `fileName`). |
+| `get-file-run-status` | Checks (and optionally waits for) an asynchronous file de-identification run and returns the processed file when it completes. |
+| `re-identify-file` | Restores original sensitive data in a previously de-identified file (csv, doc, docx, json, txt, xls, xlsx, xml). |
+
+**Files and async processing**: Skyflow processes files asynchronously. `de-identify-file` waits up to `waitTimeSeconds` (default 25s) for the run to finish — small files usually complete inline. Larger files return a `runId` with `status: "IN_PROGRESS"`; call `get-file-run-status` with that `runId` (optionally with `waitSeconds`) until it reports `SUCCESS`. Because Skyflow's file endpoints only accept base64 content, files passed by URL are downloaded server-side (25 MB limit) and converted before being forwarded — signed URLs (S3/GCS presigned, etc.) work as long as they're reachable from the server.
 
 ## Connecting in Authenticated Mode
 
@@ -177,7 +192,7 @@ curl -X POST "https://pii-mcp.dev/mcp" \
 
 ### Limitations in Anonymous Mode
 
-- **Only `de-identify` tool available** - `re-identify` returns a helpful error
+- **Only `de-identify` tool available** - `re-identify` and the file tools (`de-identify-file`, `get-file-run-status`, `re-identify-file`) return a helpful error
 - **Tokens use entity counters** - e.g., `[EMAIL_ADDRESS_1]`, `[SSN_2]` instead of vault tokens
 - **Data is NOT persisted** - tokens cannot be re-identified later
 - **Rate limited** - 10 requests per minute per IP (configurable by server operator)
@@ -255,6 +270,42 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"re-identify","arguments":{"inputString":"[REDACTED_TEXT_WITH_TOKENS]"}},"id":3}'
 ```
 
+### De-identify a File
+
+Pass a signed or public URL — the server downloads the file and forwards it to Skyflow as base64:
+
+```bash
+curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer {your_bearer_token}" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"de-identify-file","arguments":{"fileUrl":"https://example-bucket.s3.amazonaws.com/intake-form.pdf?X-Amz-Signature=...","entities":["name","ssn","email_address"]}},"id":4}'
+```
+
+Small files complete inline. If the response reports `"status": "IN_PROGRESS"`, poll with the returned `runId`:
+
+```bash
+curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer {your_bearer_token}" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get-file-run-status","arguments":{"runId":"{run_id}","waitSeconds":30}},"id":5}'
+```
+
+Inline base64 works too (instead of `fileUrl`): pass `fileDataBase64` plus `fileName` (the extension determines the format).
+
+### Re-identify a File
+
+Restore the original values in a previously de-identified text-based file (csv, doc, docx, json, txt, xls, xlsx, xml):
+
+```bash
+curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer {your_bearer_token}" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"re-identify-file","arguments":{"fileUrl":"https://example-bucket.s3.amazonaws.com/deidentified-notes.txt?X-Amz-Signature=..."}},"id":6}'
+```
+
 ## Integration with Claude Desktop
 
 Claude Desktop is one concrete client for the [Connection Contract](#connection-contract). It uses `mcp-remote` as a bridge to the Streamable HTTP endpoint. Add the following to your `claude_desktop_config.json`:
@@ -311,7 +362,7 @@ After updating the config:
 
 1. Save the file
 2. Restart Claude Desktop completely (quit and reopen)
-3. The `de-identify` and `re-identify` tools should now be available in Claude Desktop
+3. The `de-identify`, `re-identify`, `de-identify-file`, `get-file-run-status`, and `re-identify-file` tools should now be available in Claude Desktop
 
 ## Architecture
 

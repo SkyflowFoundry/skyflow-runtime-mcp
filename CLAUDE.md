@@ -44,6 +44,20 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
   -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer {your_bearer_token}" \
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"de-identify","arguments":{"inputString":"My email is john.doe@example.com"}},"id":2}'
+
+# Call de-identify-file tool with a signed/public URL
+curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer {your_bearer_token}" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"de-identify-file","arguments":{"fileUrl":"https://example-bucket.s3.amazonaws.com/scan.pdf?X-Amz-Signature=..."}},"id":3}'
+
+# Poll an in-progress file run (runId comes from the de-identify-file response)
+curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer {your_bearer_token}" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get-file-run-status","arguments":{"runId":"{run_id}","waitSeconds":30}},"id":4}'
 ```
 
 ## Architecture
@@ -54,17 +68,17 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Serves a single `/mcp` endpoint that handles all MCP protocol requests
 - Accepts query parameters: `vaultId`, `vaultUrl`, `apiKey` (optional)
 - Uses credentials extraction middleware to validate either Authorization header or apiKey query parameter
-- Configured with 5MB JSON payload limit to support base64-encoded files
+- Configured with 25MB JSON payload limit to support base64-encoded files passed inline
 
 **MCP Server Instance**
-- Registers two active tools: `de-identify` and `re-identify`
+- Registers five active tools: `de-identify`, `re-identify`, `de-identify-file`, `get-file-run-status`, and `re-identify-file`
 - Each tool is registered via `registerAppTool` from `@modelcontextprotocol/ext-apps/server`, linking tools to interactive UI resources
 - Each tool is defined with Zod schemas for input validation and output structure
 - Uses the official `@modelcontextprotocol/sdk` library
 
 **MCP Apps UI Layer** (`ui/`)
-- Active tool UIs: `ui/de-identify/` and `ui/re-identify/`
-- `ui/de-identify-file/` exists but its resource is not registered (tool is disabled)
+- Tool UIs: `ui/de-identify/`, `ui/re-identify/`, `ui/de-identify-file/`, `ui/re-identify-file/`
+- The `get-file-run-status` tool shares the `ui/de-identify-file/` app (both render de-identification run results)
 - Shared theme/styles in `ui/shared/` (theme.ts, styles.css)
 - Built with Vite + `vite-plugin-singlefile` → single HTML files in `dist/ui/`
 - Resources registered via `registerAppResource` with `ui://` URIs
@@ -85,6 +99,19 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Credentials are forwarded to Skyflow API in the appropriate format: `{ token: string }` or `{ apiKey: string }`
 - Uses `AsyncLocalStorage` to make Skyflow instance available to tools during request handling
 - Tools access the current request's Skyflow instance via `getCurrentSkyflow()` and mode via `isAnonymousMode()`
+- The request context also carries `vaultUrl` and the raw credential value for tools that call Detect REST endpoints directly (via `getDetectRestContext()`)
+
+**Detect REST Helper** (`src/lib/detect/detectRest.ts`)
+- Minimal fetch-based client for Detect endpoints the skyflow-node SDK doesn't expose:
+  `GET /v1/detect/runs/{run_id}` (run status) and `POST /v1/detect/reidentify/file`
+- Sends the same `Authorization: Bearer <credential>` the SDK would send (JWT or API key)
+- Defensively parses both camelCase and snake_case response fields — the live API returns camelCase for several fields even though the OpenAPI types say snake_case
+
+**File Source Helper** (`src/lib/files/fileSource.ts`)
+- Resolves tool file inputs: either a signed/public `fileUrl` (downloaded server-side, 25MB cap, 30s timeout) or inline `fileDataBase64` + `fileName`
+- Skyflow's file endpoints only accept base64, so URLs are always downloaded and converted before forwarding
+- Blocks obvious SSRF targets (localhost, private/link-local IP literals, `.internal`/`.local` hosts); https or http only
+- Infers the file name from the explicit arg → `Content-Disposition` header → URL path → `Content-Type` fallback; the lowercased extension selects the Skyflow endpoint/data_format
 
 ### Tool Implementations
 
@@ -101,15 +128,31 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Returns `inputText` and `processedText`
 - Returns error with `anonymousModeRestricted: true` in anonymous mode
 
-**de-identify_file tool** (`src/lib/tools/deIdentifyFile.ts`)
-- Currently disabled (not registered) — handler code preserved in `deIdentifyFile.ts` for future re-enablement
-- Was used to process images, PDFs, audio, and documents
+**de-identify-file tool** (`src/lib/tools/deIdentifyFile.ts`)
+- Detects and redacts sensitive information in files: images (bmp, jpeg, jpg, png, tif, tiff), PDFs, Word/Excel/PowerPoint, txt, csv, json, xml, dcm, and audio (mp3, wav)
+- Accepts the file as a signed/public `fileUrl` (downloaded server-side and converted to base64) or as `fileDataBase64` + `fileName`
+- Options: `entities`, `allowRegexList`, `restrictRegexList`, `tokenType` (`entity_unique_counter` | `entity_only`), `maskingMethod` (images), `outputProcessedFile` (images/audio), `outputOcrText` (images), `outputTranscription` (audio), `pixelDensity`/`maxResolution` (PDFs), `dateShift`, `bleep` (audio)
+- **Async handling**: Skyflow file de-identification is asynchronous. The tool waits up to `waitTimeSeconds` (default 25, max 64) for the run to finish; if it's still processing, the response carries `runId`, `status: "IN_PROGRESS"`, and a `note` instructing the agent to poll with `get-file-run-status`
+- Uses the SDK's `deidentifyFile`, which routes to the type-specific Skyflow endpoint based on the file extension
+
+**get-file-run-status tool** (`src/lib/tools/getFileRunStatus.ts`)
+- Polls an asynchronous de-identification run by `runId` (from `de-identify-file`)
+- Optional `waitSeconds` (0-55) long-polls server-side with backoff before returning
+- On `SUCCESS`, returns the same output shape as `de-identify-file` (processed file base64, detected entities, counts)
+- On `FAILED`, returns `isError` with Skyflow's failure message
+- Calls `GET /v1/detect/runs/{run_id}` directly via the Detect REST helper
+
+**re-identify-file tool** (`src/lib/tools/reIdentifyFile.ts`)
+- Restores original sensitive data in a previously de-identified file (formats: csv, doc, docx, json, txt, xls, xlsx, xml)
+- Accepts `fileUrl` or `fileDataBase64` + `fileName`, plus optional `redactedEntities`/`maskedEntities`/`plainTextEntities` lists controlling how each entity type is restored
+- The Skyflow endpoint is synchronous — the processed file is returned directly
+- Calls `POST /v1/detect/reidentify/file` via the Detect REST helper (the SDK has no high-level file re-identify)
 
 **Tool handler extraction pattern**
 - Core logic is in `src/lib/tools/*.ts` as pure functions with explicit parameters
-- `src/server.ts` calls these functions, passing `getCurrentSkyflow()`, `isAnonymousMode()`
+- `src/server.ts` calls these functions, passing `getCurrentSkyflow()`, `isAnonymousMode()`, and for REST-based tools `getDetectRestContext()`
 - Shared types live in `src/lib/tools/types.ts`
-- Tool files: `deIdentify.ts`, `reIdentify.ts`, `deIdentifyFile.ts`
+- Tool files: `deIdentify.ts`, `reIdentify.ts`, `deIdentifyFile.ts`, `getFileRunStatus.ts`, `reIdentifyFile.ts`
 - This separation enables unit testing without `AsyncLocalStorage` context
 
 ### Type Safety Approach
@@ -173,6 +216,9 @@ When no credentials are provided in a request, the server can operate in "anonym
 |------|---------------|-------------------|
 | `de-identify` | Works with `ENTITY_UNIQUE_COUNTER` tokens | Works with `VAULT_TOKEN` tokens |
 | `re-identify` | Returns error with setup instructions | Works normally |
+| `de-identify-file` | Returns error with setup instructions | Works normally |
+| `get-file-run-status` | Returns error with setup instructions | Works normally |
+| `re-identify-file` | Returns error with setup instructions | Works normally |
 
 **Token Format Difference**:
 - **Anonymous mode**: Uses `TokenType.ENTITY_UNIQUE_COUNTER` - generates tokens like `[EMAIL_ADDRESS_1]`, `[SSN_2]`. Data is NOT persisted to vault.
@@ -280,7 +326,7 @@ The `isError` property is set to `true` when a tool returns an error condition (
 
 - `@modelcontextprotocol/sdk`: Official MCP TypeScript SDK (v1.27.1+)
 - `@modelcontextprotocol/ext-apps`: MCP Apps SDK for interactive tool UIs
-- `skyflow-node`: Skyflow SDK for deidentification (v2.0.0+)
+- `skyflow-node`: Skyflow SDK for deidentification (v2.1.2+ — required for the fixed `IN_PROGRESS` return path in `deidentifyFile`)
 - `express`: Web framework (v5.1.0+)
 - `zod`: Schema validation for tool inputs/outputs
 - `dotenv`: Environment variable management
@@ -311,12 +357,19 @@ All of the above, plus:
 - [ ] **New UI** `ui/<tool-name>/main.ts` — implement `ontoolinput` (loading state) and `ontoolresult` (result rendering)
 - [ ] **Update MCP Server Instance count** in this file
 
+### When adding a new UI app
+
+- [ ] Add the app directory `ui/<tool-name>/` with `mcp-app.html` and `main.ts`
+- [ ] Add an `INPUT=<tool-name>/mcp-app.html vite build` step to `build:ui` in `package.json`
+- [ ] Add the `{ varName, dir }` entry to `scripts/generate-ui-imports.ts`
+- [ ] Add the export to `src/generated/ui-html.d.ts` (hand-maintained declaration for the generated module)
+
 ### When disabling a tool
 
 - [ ] Remove `registerAppTool` and `registerAppResource` calls from `src/server.ts`
 - [ ] Remove unused HTML import from `./generated/ui-html.js`
 - [ ] Remove unused handler import; keep the handler file itself for future re-enablement
-- [ ] Remove any helper functions only used by that tool (e.g. `getCurrentVaultId` was removed when `de-identify_file` was disabled)
+- [ ] Remove any helper functions only used by that tool
 - [ ] Update CLAUDE.md: tool count, Tool Implementations section, Anonymous Mode table, Common Pitfalls
 
 ## Common Pitfalls
@@ -327,5 +380,7 @@ All of the above, plus:
 4. **Vault configuration** - `clusterId` is automatically extracted from `vaultUrl`, don't set it separately
 5. **Entity type validation** - Use exact strings from `ENTITY_MAP` keys, not the enum values
 6. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
-7. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; `re-identify` returns an error with setup instructions
+7. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; the other tools return an error with setup instructions
 8. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.
+9. **File de-identification is asynchronous** - `de-identify-file` may return `runId` + `status: "IN_PROGRESS"` instead of the processed file; results are then fetched with `get-file-run-status`. Keep server-side waits bounded (SDK max 64s; watch serverless execution limits when deploying).
+10. **Detect REST response casing** - The runs and reidentify-file endpoints return camelCase fields at runtime despite snake_case OpenAPI types; `detectRest.ts` parses both. Don't "simplify" it to a single casing.

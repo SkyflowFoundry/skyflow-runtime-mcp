@@ -9,7 +9,7 @@
 		"dev": "./dev.sh",
 		"build": "pnpm build:ui && pnpm build:ui-imports && pnpm build:server",
 		"build:ui-imports": "npx -y tsx scripts/generate-ui-imports.ts",
-		"build:ui": "cd ui && INPUT=de-identify/mcp-app.html vite build && INPUT=re-identify/mcp-app.html vite build && INPUT=de-identify-file/mcp-app.html vite build",
+		"build:ui": "cd ui && INPUT=de-identify/mcp-app.html vite build && INPUT=re-identify/mcp-app.html vite build && INPUT=de-identify-file/mcp-app.html vite build && INPUT=re-identify-file/mcp-app.html vite build",
 		"build:server": "tsc",
 		"start": "node dist/server.js",
 		"server": "npx -y tsx src/server.ts",
@@ -23,7 +23,7 @@
 		"@modelcontextprotocol/sdk": "^1.27.1",
 		"dotenv": "^17.2.3",
 		"express": "^5.1.0",
-		"skyflow-node": "^2.0.0",
+		"skyflow-node": "^2.1.2",
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {

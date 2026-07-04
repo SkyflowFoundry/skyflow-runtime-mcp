@@ -3,3 +3,4 @@
 export declare const deIdentifyHtml: string;
 export declare const reIdentifyHtml: string;
 export declare const deIdentifyFileHtml: string;
+export declare const reIdentifyFileHtml: string;

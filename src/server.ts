@@ -11,14 +11,34 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import express, { type Express } from "express";
 import { z } from "zod";
-import { deIdentifyHtml, reIdentifyHtml } from "./generated/ui-html.js";
+import {
+  deIdentifyHtml,
+  reIdentifyHtml,
+  deIdentifyFileHtml,
+  reIdentifyFileHtml,
+} from "./generated/ui-html.js";
 import { Skyflow } from "skyflow-node";
 import { AsyncLocalStorage } from "async_hooks";
 import { validateVaultConfig, looksLikePlaceholder } from "./lib/validation/vaultConfig.js";
-import { ENTITY_KEYS } from "./lib/mappings/entityMaps.js";
+import {
+  ENTITY_KEYS,
+  MASKING_METHOD_KEYS,
+  TRANSCRIPTION_KEYS,
+} from "./lib/mappings/entityMaps.js";
 import { handleDeIdentify } from "./lib/tools/deIdentify.js";
 import { handleReIdentify } from "./lib/tools/reIdentify.js";
-import { toStructuredContent } from "./lib/tools/types.js";
+import {
+  handleDeIdentifyFile,
+  FILE_TOKEN_TYPE_KEYS,
+  MAX_WAIT_TIME_SECONDS,
+} from "./lib/tools/deIdentifyFile.js";
+import {
+  handleGetFileRunStatus,
+  MAX_STATUS_WAIT_SECONDS,
+} from "./lib/tools/getFileRunStatus.js";
+import { handleReIdentifyFile } from "./lib/tools/reIdentifyFile.js";
+import type { DetectRestContext } from "./lib/detect/detectRest.js";
+import { toStructuredContent, toFileToolResult } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
 import {
   createAnonymousRateLimiter,
@@ -32,31 +52,57 @@ import {
 interface RequestContext {
   skyflow: Skyflow;
   vaultId: string;
+  vaultUrl: string;
+  /** Raw bearer value (JWT or API key) forwarded to Skyflow. Never log this. */
+  credentialKey: string;
   isAnonymousMode: boolean;
 }
 
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();
 
 /**
+ * Get the full context for the current request
+ */
+function getRequestContext(): RequestContext {
+  const context = requestContextStorage.getStore();
+  if (!context) {
+    throw new Error("No request context available");
+  }
+  return context;
+}
+
+/**
  * Get the Skyflow instance for the current request context
  */
 function getCurrentSkyflow(): Skyflow {
-  const context = requestContextStorage.getStore();
-  if (!context) {
-    throw new Error("No Skyflow instance available in current request context");
-  }
-  return context.skyflow;
+  return getRequestContext().skyflow;
+}
+
+/**
+ * Get the vault ID for the current request context
+ */
+function getCurrentVaultId(): string {
+  return getRequestContext().vaultId;
 }
 
 /**
  * Check if the current request is in anonymous mode
  */
 function isAnonymousMode(): boolean {
-  const context = requestContextStorage.getStore();
-  if (!context) {
-    throw new Error("No request context available");
-  }
-  return context.isAnonymousMode;
+  return getRequestContext().isAnonymousMode;
+}
+
+/**
+ * Build the context used for direct Detect REST calls (run status, file
+ * re-identification) from the current request.
+ */
+function getDetectRestContext(): DetectRestContext {
+  const context = getRequestContext();
+  return {
+    vaultUrl: context.vaultUrl,
+    vaultId: context.vaultId,
+    credentialKey: context.credentialKey,
+  };
 }
 
 // Create an MCP server
@@ -68,6 +114,8 @@ const server = new McpServer({
 // MCP Apps: Resource URIs
 const DE_IDENTIFY_RESOURCE_URI = "ui://de-identify/mcp-app.html";
 const RE_IDENTIFY_RESOURCE_URI = "ui://re-identify/mcp-app.html";
+const DE_IDENTIFY_FILE_RESOURCE_URI = "ui://de-identify-file/mcp-app.html";
+const RE_IDENTIFY_FILE_RESOURCE_URI = "ui://re-identify-file/mcp-app.html";
 
 // Register UI resources for each tool
 registerAppResource(server, "De-identify UI", DE_IDENTIFY_RESOURCE_URI, {}, async () => ({
@@ -77,6 +125,62 @@ registerAppResource(server, "De-identify UI", DE_IDENTIFY_RESOURCE_URI, {}, asyn
 registerAppResource(server, "Re-identify UI", RE_IDENTIFY_RESOURCE_URI, {}, async () => ({
   contents: [{ uri: RE_IDENTIFY_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: reIdentifyHtml }],
 }));
+
+// Shared by de-identify-file and get-file-run-status (both render run results)
+registerAppResource(server, "De-identify File UI", DE_IDENTIFY_FILE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: DE_IDENTIFY_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: deIdentifyFileHtml }],
+}));
+
+registerAppResource(server, "Re-identify File UI", RE_IDENTIFY_FILE_RESOURCE_URI, {}, async () => ({
+  contents: [{ uri: RE_IDENTIFY_FILE_RESOURCE_URI, mimeType: RESOURCE_MIME_TYPE, text: reIdentifyFileHtml }],
+}));
+
+/**
+ * Output schema shared by the de-identify-file and get-file-run-status tools.
+ * All fields are optional because the shape differs between completed runs,
+ * in-progress runs (runId/status only), and error responses.
+ */
+const fileRunOutputSchema = {
+  inputFileName: z.string().optional().describe("Name of the input file"),
+  inputFileUrl: z.string().optional().describe("URL the input file was downloaded from"),
+  inputMimeType: z.string().optional().describe("MIME type of the input file"),
+  processedFileData: z
+    .string()
+    .optional()
+    .describe("Base64-encoded de-identified file (present when the run has completed)"),
+  mimeType: z.string().optional().describe("Type of the processed output"),
+  extension: z.string().optional().describe("File extension of the processed output"),
+  detectedEntities: z
+    .array(z.object({ file: z.string(), extension: z.string() }))
+    .optional()
+    .describe("Detected entity artifacts (e.g. image crops of detected regions)"),
+  wordCount: z.number().optional(),
+  charCount: z.number().optional(),
+  sizeInKb: z.number().optional(),
+  durationInSeconds: z.number().optional().describe("Audio duration, for audio files"),
+  pageCount: z.number().optional().describe("Page count, for documents"),
+  slideCount: z.number().optional().describe("Slide count, for presentations"),
+  runId: z
+    .string()
+    .optional()
+    .describe("Skyflow run identifier for the asynchronous de-identification job"),
+  status: z
+    .string()
+    .optional()
+    .describe("Run status: IN_PROGRESS, SUCCESS, or FAILED"),
+  message: z.string().optional().describe("Status message from Skyflow, when provided"),
+  note: z
+    .string()
+    .optional()
+    .describe("Follow-up instructions, e.g. how to poll an in-progress run"),
+  warnings: z.array(z.string()).optional().describe("Non-fatal warnings about ignored options"),
+  error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+  anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
+  helpUrl: z.string().optional().describe("URL for setup documentation"),
+  alternativeTool: z.string().optional().describe("Suggested tool to use instead"),
+  code: z.number().optional().describe("HTTP error code from Skyflow API"),
+  details: z.unknown().optional().describe("Additional error details from Skyflow API"),
+};
 
 /**
  * Skyflow De-identify Tool
@@ -168,8 +272,238 @@ registerAppTool(
   }
 );
 
+/**
+ * Skyflow De-identify File Tool
+ * Detects and redacts sensitive information in files (images, PDFs, audio,
+ * documents, spreadsheets, presentations). File processing is asynchronous:
+ * if the run doesn't finish within the bounded wait, the response carries a
+ * runId to poll with the get-file-run-status tool.
+ */
+registerAppTool(
+  server,
+  "de-identify-file",
+  {
+    title: "Skyflow De-identify File Tool",
+    description:
+      "De-identify sensitive information in a file using Skyflow. " +
+      "Pass the file either as a signed/public URL (fileUrl) — the server downloads it and forwards it to Skyflow — " +
+      "or as base64 content (fileDataBase64 + fileName). " +
+      "Supports images (jpg, png, bmp, tif), PDFs, Word/Excel/PowerPoint documents, txt, csv, json, xml, dcm, and audio (mp3, wav). " +
+      "File processing is asynchronous: small files usually complete within the default wait and return the processed file inline; " +
+      "larger files return a runId with status IN_PROGRESS — call the get-file-run-status tool with that runId to retrieve the result.",
+    inputSchema: {
+      fileUrl: z
+        .string()
+        .optional()
+        .describe(
+          "Signed or public URL of the file to de-identify (e.g. an S3/GCS signed URL). The server downloads it (25 MB max) and converts it to base64 for Skyflow. Provide either fileUrl or fileDataBase64."
+        ),
+      fileDataBase64: z
+        .string()
+        .optional()
+        .describe("Base64-encoded file content. Provide either fileUrl or fileDataBase64."),
+      fileName: z
+        .string()
+        .optional()
+        .describe(
+          "File name including extension (e.g. \"report.pdf\"). Required with fileDataBase64; optional with fileUrl (inferred from the URL or response headers when omitted). The extension determines how Skyflow processes the file."
+        ),
+      mimeType: z.string().optional().describe("MIME type of the file (optional hint, e.g. \"application/pdf\")"),
+      entities: z
+        .array(z.enum(ENTITY_KEYS))
+        .optional()
+        .describe("Specific entity types to detect. Leave empty to detect all supported entities."),
+      allowRegexList: z
+        .array(z.string())
+        .optional()
+        .describe("Regex patterns for values that should NOT be de-identified (allowlist)"),
+      restrictRegexList: z
+        .array(z.string())
+        .optional()
+        .describe("Regex patterns for additional values that SHOULD be de-identified (denylist)"),
+      tokenType: z
+        .enum(FILE_TOKEN_TYPE_KEYS)
+        .optional()
+        .describe(
+          "Token format for detected entities: entity_unique_counter (e.g. [SSN_1], default) or entity_only (e.g. [SSN])"
+        ),
+      maskingMethod: z
+        .enum(MASKING_METHOD_KEYS)
+        .optional()
+        .describe("How to mask detected regions in images: BLACKBOX or BLUR"),
+      outputProcessedFile: z
+        .boolean()
+        .optional()
+        .describe("Return the processed (redacted) file. Applies to image and audio files."),
+      outputOcrText: z
+        .boolean()
+        .optional()
+        .describe("Return OCR-extracted text for images"),
+      outputTranscription: z
+        .enum(TRANSCRIPTION_KEYS)
+        .optional()
+        .describe("Return a transcription for audio files: PLAINTEXT_TRANSCRIPTION or DIARIZED_TRANSCRIPTION"),
+      pixelDensity: z.number().positive().optional().describe("Pixel density for PDF rasterization"),
+      maxResolution: z.number().positive().optional().describe("Maximum resolution for PDF processing"),
+      dateShift: z
+        .object({
+          minDays: z.number().int().describe("Minimum number of days to shift dates"),
+          maxDays: z.number().int().describe("Maximum number of days to shift dates"),
+          entities: z.array(z.enum(ENTITY_KEYS)).describe("Date entity types to shift (e.g. dob, date)"),
+        })
+        .optional()
+        .describe("Shift detected dates by a random offset instead of tokenizing them"),
+      bleep: z
+        .object({
+          gain: z.number().optional().describe("Bleep tone gain"),
+          frequency: z.number().optional().describe("Bleep tone frequency in Hz"),
+          startPadding: z.number().optional().describe("Seconds of padding before each bleep"),
+          stopPadding: z.number().optional().describe("Seconds of padding after each bleep"),
+        })
+        .optional()
+        .describe("Bleep tone settings for redacting audio files"),
+      waitTimeSeconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_WAIT_TIME_SECONDS)
+        .optional()
+        .describe(
+          `Seconds to wait for the run to complete before returning a runId to poll (1-${MAX_WAIT_TIME_SECONDS}, default 25)`
+        ),
+    },
+    outputSchema: fileRunOutputSchema,
+    _meta: { ui: { resourceUri: DE_IDENTIFY_FILE_RESOURCE_URI } },
+  },
+  async (args) => {
+    const result = await handleDeIdentifyFile(
+      args,
+      getCurrentSkyflow(),
+      getCurrentVaultId(),
+      isAnonymousMode()
+    );
+    return toFileToolResult(result);
+  }
+);
+
+/**
+ * Skyflow File Run Status Tool
+ * Polls the status of an asynchronous file de-identification run and returns
+ * the processed file once the run completes.
+ */
+registerAppTool(
+  server,
+  "get-file-run-status",
+  {
+    title: "Skyflow File Run Status Tool",
+    description:
+      "Check the status of an asynchronous file de-identification run started by the de-identify-file tool, " +
+      "and retrieve the processed file when the run completes. " +
+      "Pass the runId returned by de-identify-file. " +
+      "Optionally pass waitSeconds to wait server-side for completion instead of polling repeatedly; " +
+      "if the run is still IN_PROGRESS after the wait, call this tool again.",
+    inputSchema: {
+      runId: z
+        .string()
+        .min(1)
+        .describe("Run identifier returned by the de-identify-file tool"),
+      waitSeconds: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_STATUS_WAIT_SECONDS)
+        .optional()
+        .describe(
+          `Seconds to wait server-side for the run to complete (0-${MAX_STATUS_WAIT_SECONDS}, default 0 = single status check)`
+        ),
+    },
+    outputSchema: fileRunOutputSchema,
+    _meta: { ui: { resourceUri: DE_IDENTIFY_FILE_RESOURCE_URI } },
+  },
+  async ({ runId, waitSeconds }) => {
+    const result = await handleGetFileRunStatus(
+      { runId, waitSeconds },
+      getDetectRestContext(),
+      isAnonymousMode()
+    );
+    return toFileToolResult(result);
+  }
+);
+
+/**
+ * Skyflow Re-identify File Tool
+ * Restores original sensitive data in a previously de-identified file.
+ */
+registerAppTool(
+  server,
+  "re-identify-file",
+  {
+    title: "Skyflow Re-identify File Tool",
+    description:
+      "Re-identify a previously de-identified file using Skyflow, replacing tokens (like [SSN_abc123]) with the original sensitive data. " +
+      "Pass the file either as a signed/public URL (fileUrl) or as base64 content (fileDataBase64 + fileName). " +
+      "Supported formats: csv, doc, docx, json, txt, xls, xlsx, xml. " +
+      "Optionally control how specific entity types are restored (redacted, masked, or plaintext).",
+    inputSchema: {
+      fileUrl: z
+        .string()
+        .optional()
+        .describe(
+          "Signed or public URL of the de-identified file (25 MB max). Provide either fileUrl or fileDataBase64."
+        ),
+      fileDataBase64: z
+        .string()
+        .optional()
+        .describe("Base64-encoded de-identified file content. Provide either fileUrl or fileDataBase64."),
+      fileName: z
+        .string()
+        .optional()
+        .describe(
+          "File name including extension (e.g. \"notes.txt\"). Required with fileDataBase64; optional with fileUrl."
+        ),
+      redactedEntities: z
+        .array(z.enum(ENTITY_KEYS))
+        .optional()
+        .describe("Entity types to keep redacted in the output"),
+      maskedEntities: z
+        .array(z.enum(ENTITY_KEYS))
+        .optional()
+        .describe("Entity types to return masked (partially visible) in the output"),
+      plainTextEntities: z
+        .array(z.enum(ENTITY_KEYS))
+        .optional()
+        .describe("Entity types to restore as plaintext in the output"),
+    },
+    outputSchema: {
+      inputFileName: z.string().optional().describe("Name of the input file"),
+      inputFileUrl: z.string().optional().describe("URL the input file was downloaded from"),
+      processedFileData: z
+        .string()
+        .optional()
+        .describe("Base64-encoded re-identified file"),
+      extension: z.string().optional().describe("File extension of the processed output"),
+      status: z.string().optional().describe("Processing status: SUCCESS or FAILED"),
+      error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
+      anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
+      message: z.string().optional().describe("Detailed error or setup instructions"),
+      helpUrl: z.string().optional().describe("URL for setup documentation"),
+      code: z.number().optional().describe("HTTP error code from Skyflow API"),
+      details: z.unknown().optional().describe("Additional error details from Skyflow API"),
+    },
+    _meta: { ui: { resourceUri: RE_IDENTIFY_FILE_RESOURCE_URI } },
+  },
+  async (args) => {
+    const result = await handleReIdentifyFile(
+      args,
+      getDetectRestContext(),
+      isAnonymousMode()
+    );
+    return toFileToolResult(result);
+  }
+);
+
 const app: Express = express();
-app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
+app.use(express.json({ limit: "25mb" })); // Limit for base64-encoded files passed inline
 
 // Serve static files from the public directory
 app.use(express.static("public"));
@@ -249,7 +583,18 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
   }
 
   // Use validated config
-  const { vaultId: validatedVaultId, clusterId } = validation.config!;
+  const { vaultId: validatedVaultId, vaultUrl: validatedVaultUrl, clusterId } = validation.config!;
+
+  // Normalize the vault URL for direct REST calls (scheme may be omitted)
+  const normalizedVaultUrl = /^https?:\/\//.test(validatedVaultUrl)
+    ? validatedVaultUrl
+    : `https://${validatedVaultUrl}`;
+
+  // Raw bearer value (JWT or API key) for direct Detect REST calls
+  const credentialKey =
+    "token" in req.skyflowCredentials
+      ? req.skyflowCredentials.token
+      : req.skyflowCredentials.apiKey;
 
   // Create per-request Skyflow instance with credentials (bearer token or API key)
   let skyflowInstance: Skyflow;
@@ -286,6 +631,8 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
     {
       skyflow: skyflowInstance,
       vaultId: validatedVaultId,
+      vaultUrl: normalizedVaultUrl,
+      credentialKey,
       isAnonymousMode: useAnonymousMode,
     },
     async () => {

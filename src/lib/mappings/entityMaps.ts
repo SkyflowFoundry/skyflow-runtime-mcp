@@ -105,6 +105,18 @@ export const TRANSCRIPTION_MAP: Record<string, DetectOutputTranscription> = {
  */
 export const ENTITY_KEYS = Object.keys(ENTITY_MAP) as [string, ...string[]];
 
+/** Tuple of valid masking method strings, derived from MASKING_METHOD_MAP. */
+export const MASKING_METHOD_KEYS = Object.keys(MASKING_METHOD_MAP) as [
+  string,
+  ...string[],
+];
+
+/** Tuple of valid transcription type strings, derived from TRANSCRIPTION_MAP. */
+export const TRANSCRIPTION_KEYS = Object.keys(TRANSCRIPTION_MAP) as [
+  string,
+  ...string[],
+];
+
 /**
  * Check if an entity type is valid
  */

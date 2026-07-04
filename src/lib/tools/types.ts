@@ -40,9 +40,10 @@ export interface DetectedEntityItem {
   extension: string;
 }
 
-/** Output from the de-identify_file tool handler */
+/** Output from the de-identify-file and get-file-run-status tool handlers */
 export interface DeIdentifyFileOutput {
   inputFileName?: string;
+  inputFileUrl?: string;
   inputMimeType?: string;
   processedFileData?: string;
   mimeType?: string;
@@ -59,6 +60,8 @@ export interface DeIdentifyFileOutput {
   slideCount?: number;
   runId?: string;
   status?: string;
+  message?: string;
+  note?: string;
   warnings?: string[];
 }
 
@@ -73,20 +76,68 @@ export interface ToolErrorOutput {
 export type DeIdentifyErrorOutput = ToolErrorOutput;
 export type ReIdentifyErrorOutput = ToolErrorOutput;
 export type DeIdentifyFileErrorOutput = ToolErrorOutput;
+export type GetFileRunStatusErrorOutput = ToolErrorOutput;
+export type ReIdentifyFileErrorOutput = ToolErrorOutput;
 
-/** Arguments for the de-identify_file tool */
+/** Date-shifting transformation options for de-identification */
+export interface DateShiftArgs {
+  minDays: number;
+  maxDays: number;
+  entities: string[];
+}
+
+/** Audio bleep options for de-identification of audio files */
+export interface BleepArgs {
+  gain?: number;
+  frequency?: number;
+  startPadding?: number;
+  stopPadding?: number;
+}
+
+/** Arguments for the de-identify-file tool */
 export interface DeIdentifyFileArgs {
-  fileData: string;
-  fileName: string;
+  fileUrl?: string;
+  fileDataBase64?: string;
+  fileName?: string;
   mimeType?: string;
   entities?: string[];
+  allowRegexList?: string[];
+  restrictRegexList?: string[];
+  tokenType?: string;
   maskingMethod?: string;
   outputProcessedFile?: boolean;
   outputOcrText?: boolean;
   outputTranscription?: string;
   pixelDensity?: number;
   maxResolution?: number;
-  waitTime?: number;
+  dateShift?: DateShiftArgs;
+  bleep?: BleepArgs;
+  waitTimeSeconds?: number;
+}
+
+/** Arguments for the get-file-run-status tool */
+export interface GetFileRunStatusArgs {
+  runId: string;
+  waitSeconds?: number;
+}
+
+/** Arguments for the re-identify-file tool */
+export interface ReIdentifyFileArgs {
+  fileUrl?: string;
+  fileDataBase64?: string;
+  fileName?: string;
+  redactedEntities?: string[];
+  maskedEntities?: string[];
+  plainTextEntities?: string[];
+}
+
+/** Output from the re-identify-file tool handler */
+export interface ReIdentifyFileOutput {
+  inputFileName?: string;
+  inputFileUrl?: string;
+  processedFileData?: string;
+  extension?: string;
+  status?: string;
 }
 
 /** Result wrapper for tool handlers that can return errors */
@@ -101,4 +152,32 @@ export interface ToolResult<T> {
  */
 export function toStructuredContent(output: object): Record<string, unknown> {
   return output as Record<string, unknown>;
+}
+
+/**
+ * Build an MCP tool result for file tools whose output can contain multi-MB
+ * base64 payloads. The full output is returned as `structuredContent`; the
+ * text `content` channel gets a compact view with the large base64 blobs
+ * replaced by placeholders, so the payload isn't serialized and shipped twice.
+ */
+export function toFileToolResult(result: ToolResult<object>): {
+  content: { type: "text"; text: string }[];
+  structuredContent: Record<string, unknown>;
+  isError?: boolean;
+} {
+  const output = result.output as Record<string, unknown>;
+  const textView: Record<string, unknown> = { ...output };
+
+  if (typeof textView.processedFileData === "string") {
+    textView.processedFileData = `[${textView.processedFileData.length} base64 chars omitted; see structuredContent]`;
+  }
+  if (Array.isArray(textView.detectedEntities)) {
+    textView.detectedEntities = `[${textView.detectedEntities.length} detected entity artifact(s); see structuredContent]`;
+  }
+
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(textView) }],
+    structuredContent: output,
+    ...(result.isError ? { isError: true } : {}),
+  };
 }

@@ -11,7 +11,14 @@ together, and the shared components each app is built from.
 |------|--------|--------------|--------------|-------------|
 | `de-identify` | Registered | `ui/de-identify/` | `ui://de-identify/mcp-app.html` | `DeIdentifyResult` |
 | `re-identify` | Registered | `ui/re-identify/` | `ui://re-identify/mcp-app.html` | `ReIdentifyResult` |
-| `de-identify_file` | UI exists, tool disabled | `ui/de-identify-file/` | _not registered_ | `DeIdentifyFileResult` |
+| `de-identify-file` | Registered | `ui/de-identify-file/` | `ui://de-identify-file/mcp-app.html` | `DeIdentifyFileResult` |
+| `get-file-run-status` | Registered (shares the de-identify-file app) | `ui/de-identify-file/` | `ui://de-identify-file/mcp-app.html` | `DeIdentifyFileResult` |
+| `re-identify-file` | Registered | `ui/re-identify-file/` | `ui://re-identify-file/mcp-app.html` | `ReIdentifyFileResult` |
+
+`get-file-run-status` intentionally reuses the de-identify-file app: both
+render the same run-result shape (status banner, processed file viewer,
+entity gallery), so the app keys its loading state off `runId` when no
+`fileName`/`fileUrl` argument is present.
 
 Registration lives in `src/server.ts` — each tool calls `registerAppResource`
 (to expose the HTML at a `ui://` URI) and `registerAppTool` (passing the
