@@ -51,6 +51,19 @@ describe("enterprise access tokens", () => {
       expect(verified.clientId).toBeUndefined();
     });
 
+    it("preserves an empty scope claim (deny-all) instead of dropping it", async () => {
+      // scope: "" means the IdP granted no tool scopes — dropping the claim
+      // would invert that into an unrestricted token
+      const issued = await issueAccessToken(
+        { subject: "user-1", scope: "" },
+        testConfig()
+      );
+      const payload = decodeJwt(issued.accessToken);
+      expect(payload.scope).toBe("");
+      const verified = await verifyAccessToken(issued.accessToken, testConfig());
+      expect(verified.scope).toBe("");
+    });
+
     it("honors the configured TTL", async () => {
       const issued = await issueAccessToken(
         identity,

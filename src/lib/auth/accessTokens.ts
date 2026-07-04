@@ -52,7 +52,9 @@ export async function issueAccessToken(
   const now = Math.floor(Date.now() / 1000);
   const jwt = new SignJWT({
     ...(identity.email && { email: identity.email }),
-    ...(identity.scope && { scope: identity.scope }),
+    // Preserve an empty scope claim ("" = no tools granted) — dropping it
+    // would invert the IdP's deny-all into an unrestricted token.
+    ...(identity.scope !== undefined && { scope: identity.scope }),
     ...(identity.clientId && { client_id: identity.clientId }),
   })
     .setProtectedHeader({ alg: "HS256", typ: ACCESS_TOKEN_TYP })

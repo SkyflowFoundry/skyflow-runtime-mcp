@@ -159,13 +159,24 @@ export function resetIdJagCaches(): void {
 // (typically 5 minutes), which bounds the replay window regardless.
 const seenJtis = new Map<string, number>();
 
-function isReplayedJti(jti: string, expiresAtMs: number): boolean {
+/** Interval for sweeping expired jti entries (keeps validation O(1)) */
+const JTI_CLEANUP_INTERVAL_MS = 60_000;
+
+const jtiCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [key, expiry] of seenJtis.entries()) {
     if (now > expiry) {
       seenJtis.delete(key);
     }
   }
+}, JTI_CLEANUP_INTERVAL_MS);
+
+// Allow the cleanup interval to not prevent process exit
+jtiCleanupInterval.unref();
+
+function isReplayedJti(jti: string, expiresAtMs: number): boolean {
+  // Lingering expired entries are harmless: a token past its exp already
+  // fails signature/expiry validation before the replay check runs.
   if (seenJtis.has(jti)) {
     return true;
   }

@@ -226,6 +226,21 @@ describe("token endpoint", () => {
     expect(identity.clientId).toBe("mcp-client-1");
   });
 
+  it("round-trips an empty scope claim (deny-all) into the issued token", async () => {
+    const assertion = await idp.signIdJag({ scope: "" });
+    const mock = await postToken({
+      grant_type: JWT_BEARER_GRANT_TYPE,
+      assertion,
+    });
+    expect(mock.statusCode).toBe(200);
+    expect(mock.jsonBody.scope).toBe("");
+    const identity = await verifyAccessToken(
+      mock.jsonBody.access_token,
+      testConfig()
+    );
+    expect(identity.scope).toBe("");
+  });
+
   it("rejects reuse of the same ID-JAG (replay)", async () => {
     const assertion = await idp.signIdJag();
     const first = await postToken({

@@ -42,6 +42,8 @@ function unauthorized(
   config: EnterpriseAuthConfig,
   options: { error?: string; description?: string } = {}
 ): void {
+  // INVARIANT: error/description are interpolated into the WWW-Authenticate
+  // header unescaped — callers must pass constants, never request-derived text.
   const challengeParts: string[] = [];
   if (options.error) {
     challengeParts.push(`error="${options.error}"`);

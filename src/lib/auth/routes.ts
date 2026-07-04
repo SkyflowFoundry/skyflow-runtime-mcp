@@ -138,7 +138,9 @@ export function createTokenHandler(
         token_type: "Bearer",
         access_token: issued.accessToken,
         expires_in: issued.expiresIn,
-        ...(issued.scope && { scope: issued.scope }),
+        // Included even when empty: "" means the IdP granted no tool scopes,
+        // which is different from omitting the claim (unrestricted).
+        ...(issued.scope !== undefined && { scope: issued.scope }),
       });
     } catch (error) {
       if (error instanceof IdJagValidationError) {
