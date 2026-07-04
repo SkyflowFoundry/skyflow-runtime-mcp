@@ -58,7 +58,10 @@ function configForRequest(
     throw error;
   }
   if (!config) {
-    res.status(404).json({ error: "not_found" });
+    res.status(404).json({
+      error: "not_found",
+      error_description: "Enterprise-managed authorization is not enabled on this server",
+    });
     return null;
   }
   return config;

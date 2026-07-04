@@ -101,6 +101,8 @@ The server supports the MCP [Enterprise-Managed Authorization extension](https:/
 
 The feature is off by default and enabled via `ENTERPRISE_AUTH_ENABLED=true`. It supports a `required` mode (every request needs SSO-derived auth — for self-hosted enterprise deployments) and an `optional` mode (SSO tokens accepted alongside ordinary Skyflow credentials — for shared endpoints). See [docs/enterprise-managed-auth.md](docs/enterprise-managed-auth.md) for the full flow, environment variable reference, and IdP setup for both deployment scenarios.
 
+> **Serverless note:** ID-JAG replay detection and `/token` rate limiting use in-memory, per-instance state. On horizontally scaled or serverless platforms (Vercel included) they are best-effort only — if your threat model requires strict single-use grants or hard rate limits, back them with a shared store or enforce at your edge. Details in the [security notes](docs/enterprise-managed-auth.md#security-notes).
+
 ## Installation
 
 ```bash
