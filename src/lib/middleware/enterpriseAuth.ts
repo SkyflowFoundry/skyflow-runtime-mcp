@@ -107,6 +107,7 @@ function resolveSkyflowCredentials(
     }
     // SECURITY: req.skyflowCredentials contains secrets — never log or serialize the request object.
     req.skyflowCredentials = result.credentials;
+    req.skyflowCredentialsSource = "header";
     req.isAnonymousMode = false;
     return true;
   }
@@ -114,6 +115,7 @@ function resolveSkyflowCredentials(
   if (env.SKYFLOW_API_KEY) {
     // SECURITY: req.skyflowCredentials contains secrets — never log or serialize the request object.
     req.skyflowCredentials = { apiKey: env.SKYFLOW_API_KEY };
+    req.skyflowCredentialsSource = "env";
     req.isAnonymousMode = false;
     return true;
   }

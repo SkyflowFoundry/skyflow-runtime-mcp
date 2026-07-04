@@ -262,6 +262,7 @@ declare global {
       isAnonymousMode: boolean; // Always set by authenticateBearer middleware
       anonVaultConfig?: { vaultId: string; vaultUrl: string };
       enterpriseAuth?: EnterpriseIdentity; // Set when enterprise auth verified the request
+      skyflowCredentialsSource?: "header" | "env"; // Where enterprise auth resolved Skyflow credentials from
     }
   }
 }
@@ -278,16 +279,30 @@ app.post("/mcp", createEnterpriseAuthMiddleware(), authenticateBearer, anonymous
   const hasPlaceholderParams =
     looksLikePlaceholder(queryVaultId) || looksLikePlaceholder(queryVaultUrl);
 
-  // Enterprise-authenticated requests with a server-side vault configuration
-  // ignore unsubstituted placeholder params instead of demoting to anonymous
-  // mode: the deployment's env vault config is authoritative for them.
+  // Enterprise requests using the SERVER's service credential ignore
+  // unsubstituted placeholder params in favor of the env vault config — the
+  // deployment's credential and vault belong together. Per-user credentials
+  // (X-Skyflow-Authorization) are NOT paired with the server's vault: we
+  // don't know which vault they belong to.
   const usesEnvVaultFallback =
     hasPlaceholderParams &&
     req.enterpriseAuth !== undefined &&
+    req.skyflowCredentialsSource === "env" &&
     !!process.env.VAULT_ID &&
     !!process.env.VAULT_URL;
 
   if (hasPlaceholderParams && !req.isAnonymousMode && !usesEnvVaultFallback) {
+    if (req.enterpriseAuth) {
+      // Enterprise-authenticated requests never demote to the anonymous
+      // vault via the placeholder path; a broken vault template alongside
+      // per-user credentials is a client configuration error.
+      return res.status(400).json({
+        error:
+          "Configuration error: vaultId/vaultUrl query parameters contain unsubstituted placeholders " +
+          "(e.g. ${SKYFLOW_VAULT_ID}). Fix the client's URL template or configure VAULT_ID/VAULT_URL " +
+          "with SKYFLOW_API_KEY on the server.",
+      });
+    }
     // Query params contain placeholders - check if anonymous mode is available as fallback
     const anonApiKey = process.env.ANON_MODE_API_KEY;
     const anonVaultId = process.env.ANON_MODE_VAULT_ID;

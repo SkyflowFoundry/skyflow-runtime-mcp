@@ -253,6 +253,30 @@ describe("enterprise auth HTTP flow (integration)", () => {
     expect(listBody?.result?.tools?.length).toBeGreaterThan(0);
   });
 
+  it("rejects placeholder vault params when per-user credentials are supplied", async () => {
+    // Per-user credentials must not be paired with the server's vault, and
+    // enterprise requests never demote to the anonymous vault: broken client
+    // template + X-Skyflow-Authorization is a clear 400
+    const { body } = await exchangeToken(await signIdJag());
+    const params = new URLSearchParams({
+      vaultId: "${SKYFLOW_VAULT_ID}",
+      vaultUrl: "${SKYFLOW_VAULT_URL}",
+    });
+    const res = await fetch(`${baseUrl}/mcp?${params}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${body.access_token}`,
+        "x-skyflow-authorization": "Bearer sky-per-user-key",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 10 }),
+    });
+    expect(res.status).toBe(400);
+    const errBody = await res.json();
+    expect(errBody.error).toContain("unsubstituted placeholders");
+  });
+
   it("returns 401 when enterprise auth passes but no Skyflow credentials resolve", async () => {
     // Without SKYFLOW_API_KEY, X-Skyflow-Authorization, apiKey param, or
     // anonymous mode, the documented hard-failure path is a credentials 401.

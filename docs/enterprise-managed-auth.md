@@ -82,6 +82,8 @@ The `Authorization` header now carries the enterprise access token, so Skyflow v
 2. **`SKYFLOW_API_KEY` environment variable** — a server-wide service credential. The typical setup for enterprise deployments: employees authenticate with SSO only and never handle Skyflow credentials.
 3. **Existing fallbacks** — the `apiKey` query parameter, then anonymous mode if configured.
 
+If a client's URL template leaves unsubstituted `${...}` placeholders in the `vaultId`/`vaultUrl` query parameters, an enterprise request using the **server's service credential** (`SKYFLOW_API_KEY`) falls back to the server's `VAULT_ID`/`VAULT_URL` — the deployment's credential and vault belong together. A request carrying **per-user credentials** (`X-Skyflow-Authorization`) gets a 400 instead: the server won't guess which vault those credentials belong to, and enterprise requests are never demoted to the anonymous vault via the placeholder path.
+
 What happens when none of these yield credentials depends on the mode:
 
 - **`required` mode returns 401** (`missing_skyflow_credentials`) — a deployment that demands SSO on every request is never silently served from the anonymous demo vault, even when `ANON_MODE_*` is configured.
@@ -138,6 +140,7 @@ Simulating what an enterprise-enabled MCP client does after SSO (you need a real
 curl https://mcp.example.com/.well-known/oauth-protected-resource/mcp
 
 # 2. Exchange the ID-JAG for an access token
+#    (must be application/x-www-form-urlencoded per RFC 6749 — JSON bodies are not parsed)
 curl -X POST https://mcp.example.com/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
