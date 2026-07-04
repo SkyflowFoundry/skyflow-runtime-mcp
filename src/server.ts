@@ -503,7 +503,6 @@ registerAppTool(
 );
 
 const app: Express = express();
-app.use(express.json({ limit: "25mb" })); // Limit for base64-encoded files passed inline
 
 // Serve static files from the public directory
 app.use(express.static("public"));
@@ -512,6 +511,12 @@ app.use(express.static("public"));
 const anonymousRateLimiter = createAnonymousRateLimiter(
   getAnonymousRateLimitConfig()
 );
+
+// Body parser for the /mcp endpoint. 25MB accommodates base64-encoded files
+// passed inline. It is applied per-route AFTER auth + rate limiting (below) so
+// an unauthenticated/over-limit client can't force the server to buffer a large
+// body before its credentials are checked.
+const parseMcpBody = express.json({ limit: "25mb" });
 
 // Extend Express Request type to include custom properties
 declare global {
@@ -524,7 +529,7 @@ declare global {
   }
 }
 
-app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
+app.post("/mcp", authenticateBearer, anonymousRateLimiter, parseMcpBody, async (req, res) => {
   // Determine vault configuration based on mode
   let vaultId: string | undefined;
   let vaultUrl: string | undefined;

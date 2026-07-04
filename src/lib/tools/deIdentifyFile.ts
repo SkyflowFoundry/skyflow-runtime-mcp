@@ -259,18 +259,20 @@ export async function handleDeIdentifyFile(
       output.inputFileUrl = fileUrl;
     }
 
+    // Only describe the processed file (data/extension/mimeType) when one was
+    // actually returned — an IN_PROGRESS run has no output yet, so reporting the
+    // input file's extension/MIME would falsely imply a downloadable result.
     if (response.fileBase64) {
       output.processedFileData = response.fileBase64;
+      // response.type is a Skyflow category label (e.g. "redacted_image"), not a
+      // MIME type — derive a real MIME from the processed file's extension so
+      // UIs can render/download it correctly.
+      const processedExtension = response.extension || resolved.extension;
+      if (processedExtension) {
+        output.extension = processedExtension;
+        output.mimeType = mimeTypeFromExtension(processedExtension) ?? effectiveMimeType;
+      }
     }
-
-    // response.type is a Skyflow category label (e.g. "redacted_image"), not a
-    // MIME type — derive a real MIME from the processed file's extension so UIs
-    // can render/download it correctly.
-    const processedExtension = response.extension || resolved.extension;
-    if (processedExtension) {
-      output.extension = processedExtension;
-    }
-    output.mimeType = mimeTypeFromExtension(processedExtension) ?? effectiveMimeType;
 
     if (response.entities && response.entities.length > 0) {
       output.detectedEntities = response.entities.map(

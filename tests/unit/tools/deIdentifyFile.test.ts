@@ -504,6 +504,10 @@ describe("handleDeIdentifyFile", () => {
       expect(output.status).toBe("IN_PROGRESS");
       expect(output.note).toContain("get-file-run-status");
       expect(output.note).toContain("run_async_456");
+      // No processed file yet — must not report a downloadable extension/MIME
+      expect(output.processedFileData).toBeUndefined();
+      expect(output.extension).toBeUndefined();
+      expect(output.mimeType).toBeUndefined();
     });
 
     it("should omit optional fields when not in response", async () => {
