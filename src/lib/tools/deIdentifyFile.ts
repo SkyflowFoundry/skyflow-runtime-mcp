@@ -322,9 +322,11 @@ export async function handleDeIdentifyFile(
 
       // Attach polling guidance for any non-complete status (IN_PROGRESS or
       // otherwise), not just the exact "IN_PROGRESS" string, so the agent is
-      // never left with a runId and no direction. A completed run that returned
-      // no file inline (e.g. entities-only) reports SUCCESS and needs no note.
-      if (!response.status || response.status.toUpperCase() !== "SUCCESS") {
+      // never left with a runId and no direction. Only when no file came back
+      // inline — if a processed file is present the run is done, so a
+      // "still processing" note would contradict the payload.
+      const notComplete = !response.status || response.status.toUpperCase() !== "SUCCESS";
+      if (notComplete && !output.processedFileData) {
         output.note = stillProcessingNote(response.runId);
       }
     }

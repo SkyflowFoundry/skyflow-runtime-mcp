@@ -55,12 +55,14 @@ function toOutput(runId: string, run: DetectRunResult): DeIdentifyFileOutput {
     }));
   }
 
-  if (run.wordCount !== undefined) output.wordCount = run.wordCount;
-  if (run.charCount !== undefined) output.charCount = run.charCount;
-  if (run.sizeInKb !== undefined) output.sizeInKb = run.sizeInKb;
-  if (run.durationInSeconds !== undefined) output.durationInSeconds = run.durationInSeconds;
-  if (run.pageCount !== undefined) output.pageCount = run.pageCount;
-  if (run.slideCount !== undefined) output.slideCount = run.slideCount;
+  // Omit zero counts (consistent with de-identify-file) — a 0 word/page/etc.
+  // count carries no useful signal and clutters format-inapplicable results.
+  if (run.wordCount) output.wordCount = run.wordCount;
+  if (run.charCount) output.charCount = run.charCount;
+  if (run.sizeInKb) output.sizeInKb = run.sizeInKb;
+  if (run.durationInSeconds) output.durationInSeconds = run.durationInSeconds;
+  if (run.pageCount) output.pageCount = run.pageCount;
+  if (run.slideCount) output.slideCount = run.slideCount;
   if (run.message) output.message = run.message;
 
   return output;

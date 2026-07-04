@@ -538,6 +538,22 @@ describe("handleDeIdentifyFile", () => {
       expect(output.note).toBeUndefined();
     });
 
+    it("should not contradict itself: a returned file suppresses the polling note", async () => {
+      // Defensive: a processed file present alongside a runId and a non-SUCCESS
+      // status must not carry a "still processing" note.
+      const skyflow = createMockSkyflow({
+        runId: "run_weird_1",
+        status: "IN_PROGRESS",
+        fileBase64: "base64data",
+        extension: "png",
+      });
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
+
+      expect(output.processedFileData).toBe("base64data");
+      expect(output.note).toBeUndefined();
+    });
+
     it("should omit optional fields when not in response", async () => {
       const skyflow = createMockSkyflow({});
       const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);

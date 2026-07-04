@@ -126,7 +126,7 @@ const NOT_ALLOWED = (hostname: string) =>
  * the validated IP — deployments handling untrusted URLs should also enforce
  * network egress controls to a metadata endpoint.
  */
-async function assertHostAllowed(hostname: string): Promise<void> {
+async function assertHostAllowed(hostname: string, signal: AbortSignal): Promise<void> {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
 
   if (
@@ -146,11 +146,14 @@ async function assertHostAllowed(hostname: string): Promise<void> {
     return;
   }
 
-  // Hostname: resolve and reject if any resolved address is non-public.
+  // Hostname: resolve and reject if any resolved address is non-public. The
+  // lookup is raced against the download's AbortSignal so a slow/hostile
+  // resolver can't block past the overall download timeout.
   let addresses: { address: string }[];
   try {
-    addresses = await lookup(host, { all: true });
-  } catch {
+    addresses = await raceAbort(lookup(host, { all: true }), signal);
+  } catch (error) {
+    if (error instanceof FileSourceError) throw error;
     throw new FileSourceError(`Failed to download fileUrl: could not resolve host "${hostname}".`);
   }
   if (addresses.some(({ address }) => isBlockedIp(address))) {
@@ -201,6 +204,40 @@ function fileNameFromUrl(url: URL): string | undefined {
   } catch {
     return last;
   }
+}
+
+/**
+ * Race a promise against an AbortSignal so a hung operation (e.g. a slow DNS
+ * resolver) can't outlive the download's overall timeout. Rejects with a
+ * timeout FileSourceError if the signal fires first.
+ */
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  const timedOut = () =>
+    new FileSourceError(
+      `Failed to download fileUrl: download timed out after ${DOWNLOAD_TIMEOUT_MS / 1000}s`
+    );
+  if (signal.aborted) return Promise.reject(timedOut());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(timedOut());
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+/** Release a response body we won't read, so the socket isn't held until GC. */
+function drainBody(response: Response): void {
+  response.body?.cancel().catch(() => {
+    /* best effort */
+  });
 }
 
 /**
@@ -277,7 +314,7 @@ export async function downloadFileFromUrl(fileUrl: string): Promise<{
 
   try {
     for (let redirects = 0; ; redirects++) {
-      await assertHostAllowed(url.hostname);
+      await assertHostAllowed(url.hostname, controller.signal);
 
       let response: Response;
       try {
@@ -291,6 +328,8 @@ export async function downloadFileFromUrl(fileUrl: string): Promise<{
 
       // Manual redirect handling: re-validate the destination host each hop.
       if (response.status >= 300 && response.status < 400) {
+        // The redirect response body is unused — release it promptly.
+        drainBody(response);
         const location = response.headers.get("location");
         if (!location) {
           throw new FileSourceError(
@@ -318,6 +357,7 @@ export async function downloadFileFromUrl(fileUrl: string): Promise<{
       }
 
       if (!response.ok) {
+        drainBody(response);
         throw new FileSourceError(
           `Failed to download fileUrl: server responded with HTTP ${response.status}. ` +
             `If this is a signed URL, it may have expired.`

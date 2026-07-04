@@ -68,7 +68,7 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Serves a single `/mcp` endpoint that handles all MCP protocol requests
 - Accepts query parameters: `vaultId`, `vaultUrl`, `apiKey` (optional)
 - Uses credentials extraction middleware to validate either Authorization header or apiKey query parameter
-- Configured with 25MB JSON payload limit to support base64-encoded files passed inline
+- Configured with a 34MB JSON body limit on `/mcp` (applied after auth + rate limiting) — sized so an inline base64 file up to the 25MB decoded cap (~33% base64 inflation + JSON envelope) is accepted; 25MB decoded is the user-facing file-size cap for both inline and URL inputs
 
 **MCP Server Instance**
 - Registers five active tools: `de-identify`, `re-identify`, `de-identify-file`, `get-file-run-status`, and `re-identify-file`
@@ -382,6 +382,6 @@ All of the above, plus:
 6. **AsyncLocalStorage context** - Tools must run within the request context to access Skyflow instance via `getCurrentSkyflow()` and `isAnonymousMode()`
 7. **Anonymous mode limitations** - Only the `de-identify` tool works in anonymous mode; the other tools return an error with setup instructions
 8. **Keep schemas in sync** - When modifying tool inputs or return values, always update the corresponding `inputSchema` and `outputSchema` in the tool registration. The schemas must match the actual implementation.
-9. **File de-identification is asynchronous** - `de-identify-file` may return `runId` + `status: "IN_PROGRESS"` instead of the processed file; results are then fetched with `get-file-run-status`. Keep server-side waits bounded (SDK max 64s; watch serverless execution limits when deploying).
+9. **File de-identification is asynchronous** - `de-identify-file` may return `runId` + `status: "IN_PROGRESS"` instead of the processed file; results are then fetched with `get-file-run-status`. Server-side waits are bounded (`de-identify-file` default 25s, SDK max 64s; `get-file-run-status` `waitSeconds` max 55s). **These hold the HTTP request open**, so the deploy's function timeout must exceed the chosen wait (plus download time) or the platform 504s before the graceful `runId` response is produced — on short-timeout tiers (e.g. Vercel Hobby 10s) pass a smaller `waitTimeSeconds`/`waitSeconds` or raise the function `maxDuration`. The `runId` persists, so a cut-off wait is always recoverable by polling.
 10. **Detect REST response casing** - The runs and reidentify-file endpoints return camelCase fields at runtime despite snake_case OpenAPI types; `detectRest.ts` parses both. Don't "simplify" it to a single casing.
 11. **File URL downloads are an SSRF surface** - `de-identify-file`/`re-identify-file` fetch arbitrary user-supplied URLs. `src/lib/files/fileSource.ts` guards this: https/http only, private/loopback/link-local/CGNAT/metadata IPs blocked in every literal encoding, hostnames resolved and every resolved address checked, each redirect hop re-validated, and a streaming size cap. This does NOT fully close DNS-rebinding (a check-time/fetch-time TOCTOU). **When deploying where untrusted URLs may be submitted, also enforce network egress controls** (e.g. block the cloud metadata endpoint `169.254.169.254`) — the in-process guard is defense in depth, not a substitute.
