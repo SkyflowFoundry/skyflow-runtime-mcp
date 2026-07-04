@@ -244,7 +244,7 @@ describe("enterprise auth middleware", () => {
     it("still rejects invalid tokens that claim this server as issuer", async () => {
       const issued = await issueAccessToken(
         identity,
-        testConfig({ signingKey: "wrong-signing-key-that-is-32-chars-x" })
+        testConfig({ signingKey: "wrong-signing-key-that-is-32-chars-x" }) // gitleaks:allow
       );
       const req = createMockRequest({
         headers: { authorization: `Bearer ${issued.accessToken}` },
