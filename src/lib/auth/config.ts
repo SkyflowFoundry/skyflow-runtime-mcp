@@ -82,7 +82,9 @@ function requireUrl(name: string, value: string | undefined): string {
     throw new EnterpriseAuthConfigError(`${name} must be a valid URL, got: ${trimmed}`);
   }
   const isLocalhost =
-    parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+    parsed.hostname === "localhost" ||
+    parsed.hostname === "127.0.0.1" ||
+    parsed.hostname === "[::1]";
   if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLocalhost)) {
     throw new EnterpriseAuthConfigError(
       `${name} must use https (http is only allowed for localhost), got: ${trimmed}`

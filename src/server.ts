@@ -278,7 +278,16 @@ app.post("/mcp", createEnterpriseAuthMiddleware(), authenticateBearer, anonymous
   const hasPlaceholderParams =
     looksLikePlaceholder(queryVaultId) || looksLikePlaceholder(queryVaultUrl);
 
-  if (hasPlaceholderParams && !req.isAnonymousMode) {
+  // Enterprise-authenticated requests with a server-side vault configuration
+  // ignore unsubstituted placeholder params instead of demoting to anonymous
+  // mode: the deployment's env vault config is authoritative for them.
+  const usesEnvVaultFallback =
+    hasPlaceholderParams &&
+    req.enterpriseAuth !== undefined &&
+    !!process.env.VAULT_ID &&
+    !!process.env.VAULT_URL;
+
+  if (hasPlaceholderParams && !req.isAnonymousMode && !usesEnvVaultFallback) {
     // Query params contain placeholders - check if anonymous mode is available as fallback
     const anonApiKey = process.env.ANON_MODE_API_KEY;
     const anonVaultId = process.env.ANON_MODE_VAULT_ID;
@@ -304,6 +313,11 @@ app.post("/mcp", createEnterpriseAuthMiddleware(), authenticateBearer, anonymous
     // Use anonymous mode configuration
     vaultId = req.anonVaultConfig.vaultId;
     vaultUrl = req.anonVaultConfig.vaultUrl;
+  } else if (usesEnvVaultFallback) {
+    // Placeholder query params from an enterprise client: use the
+    // server-side vault configuration instead
+    vaultId = process.env.VAULT_ID;
+    vaultUrl = process.env.VAULT_URL;
   } else {
     // Use client-provided or environment configuration
     vaultId = (req.query.vaultId as string) || process.env.VAULT_ID;
