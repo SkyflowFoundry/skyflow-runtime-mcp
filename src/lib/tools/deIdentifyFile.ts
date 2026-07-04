@@ -50,6 +50,20 @@ export function stillProcessingNote(runId: string): string {
   );
 }
 
+/**
+ * Note attached when a run completed successfully but produced no processed
+ * file or detected entities (e.g. no file-producing output option was
+ * requested). Shared by de-identify-file and get-file-run-status so both tools
+ * explain an empty-but-successful result the same way.
+ */
+export function completedWithoutArtifactNote(runId?: string): string {
+  const subject = runId ? `Run ${runId}` : "The run";
+  return (
+    `${subject} completed successfully but returned no processed file or detected entities. ` +
+    `This can happen when no file-producing output option was requested.`
+  );
+}
+
 /** Token type strings supported by the file endpoints (vault tokens are text-only). */
 const FILE_TOKEN_TYPE_MAP: Record<string, TokenType> = {
   entity_unique_counter: TokenType.ENTITY_UNIQUE_COUNTER,
@@ -329,6 +343,12 @@ export async function handleDeIdentifyFile(
       if (notComplete && !output.processedFileData) {
         output.note = stillProcessingNote(response.runId);
       }
+    }
+
+    // Completed inline but with no artifact — say so explicitly (consistent with
+    // get-file-run-status) rather than returning a silent empty success.
+    if (!output.note && !output.processedFileData && !output.detectedEntities) {
+      output.note = completedWithoutArtifactNote(response.runId);
     }
 
     if (warnings.length > 0) {

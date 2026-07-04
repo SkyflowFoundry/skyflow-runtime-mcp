@@ -92,6 +92,8 @@ function renderResult(data: ReIdentifyFileResult): void {
         `;
       }
     }
+    // processedFileData is base64 (charset [A-Za-z0-9+/=]), so it cannot break
+    // out of the double-quoted href attribute — safe to interpolate unescaped.
     downloadHtml = `
       <div class="file-viewer" style="margin-top: 16px;">
         <a href="data:application/octet-stream;base64,${data.processedFileData}"

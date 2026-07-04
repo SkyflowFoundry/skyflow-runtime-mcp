@@ -5,7 +5,7 @@ import {
   type DetectRunResult,
 } from "../detect/detectRest.js";
 import { mimeTypeFromExtension } from "../mappings/fileFormats.js";
-import { stillProcessingNote } from "./deIdentifyFile.js";
+import { stillProcessingNote, completedWithoutArtifactNote } from "./deIdentifyFile.js";
 import type {
   GetFileRunStatusArgs,
   DeIdentifyFileOutput,
@@ -140,9 +140,7 @@ export async function handleGetFileRunStatus(
       // Completed, but with no file/entity artifact (e.g. output options that
       // produce no file were requested). Say so explicitly so a caller doesn't
       // read the empty-but-successful response as a lost result.
-      output.note =
-        `Run ${runId} completed successfully but returned no processed file or detected entities. ` +
-        `This can happen when no file-producing output option was requested.`;
+      output.note = completedWithoutArtifactNote(runId);
     }
 
     return { output };

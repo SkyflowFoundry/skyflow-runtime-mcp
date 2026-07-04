@@ -554,6 +554,17 @@ describe("handleDeIdentifyFile", () => {
       expect(output.note).toBeUndefined();
     });
 
+    it("should explain a completed run that returned no file or entities", async () => {
+      const skyflow = createMockSkyflow({ runId: "run_empty_1", status: "SUCCESS" });
+      const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);
+      const output = result.output as DeIdentifyFileOutput;
+
+      expect(result.isError).toBeUndefined();
+      expect(output.processedFileData).toBeUndefined();
+      expect(output.detectedEntities).toBeUndefined();
+      expect(output.note).toContain("no processed file");
+    });
+
     it("should omit optional fields when not in response", async () => {
       const skyflow = createMockSkyflow({});
       const result = await handleDeIdentifyFile(baseArgs, skyflow as any, "vault123", false);

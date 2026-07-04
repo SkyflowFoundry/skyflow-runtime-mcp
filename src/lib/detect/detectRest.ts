@@ -68,6 +68,10 @@ export interface ReidentifyFileResult {
 
 const REQUEST_TIMEOUT_MS = 65_000;
 
+// Returns the first present (non-null/undefined) value among the given keys,
+// tolerating both camelCase and snake_case API responses. Note: a numeric 0 is
+// "present" and returned as-is; the tools decide downstream whether to surface a
+// zero count (they omit zeros — see toOutput / handleDeIdentifyFile).
 function pick<T>(record: Record<string, unknown>, ...keys: string[]): T | undefined {
   for (const key of keys) {
     const value = record[key];
