@@ -72,6 +72,8 @@ Scopes let IdP administrators control *which tools* a user or client may invoke,
 
 For example, an Okta policy granting the `de-identify` scope to the "support" group lets those users redact text but never restore original PII, while the "compliance" group gets both scopes.
 
+> **Known assumption to verify against your IdP:** scope values must match tool names *exactly* — configure your IdP to issue the literal scopes `de-identify` and `re-identify`. Some IdPs default to namespaced or audience-qualified scope strings (e.g. `mcp:de-identify`); those will not match and will deny the tool. If your IdP cannot issue bare scope names, omit the scope grant entirely (unrestricted) until a mapping layer is added. This is one of the items to validate when wiring up a live Okta org.
+
 ## Skyflow vault credentials under enterprise auth
 
 The `Authorization` header now carries the enterprise access token, so Skyflow vault credentials are resolved separately, in order of precedence:
