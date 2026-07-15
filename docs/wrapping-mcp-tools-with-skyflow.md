@@ -109,6 +109,11 @@ const skyflow = new Skyflow({
 });
 ```
 
+The `?.[1]!` non-null assertion keeps the snippet short. Production code should **validate** the
+vault URL and fail loudly on a malformed value rather than pass `undefined` as the cluster ID — this
+repo does exactly that in `extractClusterId` / `validateVaultConfig`
+(`src/lib/validation/vaultConfig.ts`).
+
 ### 2. Two small helpers
 
 These mirror the calls in `src/lib/tools/deIdentify.ts` and `src/lib/tools/reIdentify.ts`.
@@ -180,12 +185,16 @@ server.registerTool(
 
 That is the whole integration: two helper calls bracketing logic you already have.
 
-> **Note:** Re-identify only restores tokens that actually appear in the downstream response, so it
-> shines for tools whose output is derived from the input — summarize, translate, draft-a-reply,
-> data enrichment — where the tokens flow through. For a tool like **search**, the provider returns
-> matched documents rather than an echo of your query, so re-identifying the results is often a
-> no-op; there the win is on the **request** side (PII in your search terms never reaches the third
-> party), while re-identify still restores any tokens that do surface in the results.
+> **Note:** Re-identify matches token strings **verbatim** — it only restores tokens that come back
+> in the response exactly as they left (`[EMAIL_ADDRESS_a1b2]`). Two things to keep in mind:
+> - A model that paraphrases, reformats, or truncates text (a summarizer/LLM) can alter or drop a
+>   bracketed token, in which case it silently won't be re-identified. Test that your downstream
+>   call preserves tokens intact before relying on the round-trip.
+> - A tool like **search** returns matched documents rather than an echo of your query, so
+>   re-identifying the results is often a no-op.
+>
+> Either way, the guaranteed win is on the **request** side — PII never reaches the third party —
+> and re-identify restores whatever tokens survive intact.
 
 ### Optional: limit detection to specific entities
 
@@ -209,6 +218,8 @@ The SDK is a thin wrapper over Skyflow's Detect REST API, so any language can in
 way over plain HTTP. De-identify text with a `POST` to the deidentify endpoint:
 
 ```bash
+# ILLUSTRATIVE — confirm the endpoint path, headers, and body fields against the
+# Skyflow Detect API reference (link below) before using this in real code.
 curl -X POST "https://<CLUSTER_ID>.vault.skyflowapis.com/v1/detect/deidentify/string" \
   -H "Authorization: Bearer <API_KEY_OR_BEARER_TOKEN>" \
   -H "X-SKYFLOW-ACCOUNT-ID: <ACCOUNT_ID>" \
