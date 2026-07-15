@@ -94,8 +94,11 @@ npm install skyflow-node
 ```ts
 import { Skyflow } from "skyflow-node";
 
-const vaultUrl = process.env.SKYFLOW_VAULT_URL!; // e.g. https://ebfc9bee4242.vault.skyflowapis.com
-const clusterId = vaultUrl.match(/(?:https?:\/\/)?([^.]+)\.vault/)?.[1]!;
+const vaultUrl = process.env.SKYFLOW_VAULT_URL; // e.g. https://ebfc9bee4242.vault.skyflowapis.com
+const clusterId = vaultUrl?.match(/(?:https?:\/\/)?([^.]+)\.vault/)?.[1];
+if (!clusterId) {
+  throw new Error(`Invalid or missing SKYFLOW_VAULT_URL: ${vaultUrl}`);
+}
 
 const skyflow = new Skyflow({
   vaultConfigs: [
@@ -109,9 +112,8 @@ const skyflow = new Skyflow({
 });
 ```
 
-The `?.[1]!` non-null assertion keeps the snippet short. Production code should **validate** the
-vault URL and fail loudly on a malformed value rather than pass `undefined` as the cluster ID — this
-repo does exactly that in `extractClusterId` / `validateVaultConfig`
+The guard fails loudly on a missing or malformed vault URL instead of silently passing `undefined`
+as the cluster ID — the same thing this repo does in `extractClusterId` / `validateVaultConfig`
 (`src/lib/validation/vaultConfig.ts`).
 
 ### 2. Two small helpers
@@ -237,12 +239,13 @@ by sending the tokenized text to the corresponding reidentify endpoint with the 
 authentication headers.
 
 > [!WARNING]
-> The REST request/response shapes evolve and differ slightly by API version. Treat the example
-> above as illustrative and confirm the exact endpoint paths, field names, and the **reidentify**
-> request body against the official
-> [Skyflow Detect API reference](https://docs.skyflow.com/detect/) before shipping. When you have a
-> Node runtime, prefer [Approach A](#approach-a--skyflow-node-sdk-recommended) — it keeps you
-> insulated from those details.
+> The REST shapes here are **illustrative and unverified** — confirm them against the official
+> [Skyflow Detect API reference](https://docs.skyflow.com/detect/) before shipping. In particular,
+> verify the endpoint path (`/v1/detect/deidentify/string`), the `entity_types` and `token_type`
+> body fields, whether the `X-SKYFLOW-ACCOUNT-ID` header is required, and the **reidentify** request
+> body (not shown here). When you have a Node runtime, prefer
+> [Approach A](#approach-a--skyflow-node-sdk-recommended) — it keeps you insulated from these
+> details.
 
 ## Credentials & configuration
 
@@ -270,7 +273,9 @@ SKYFLOW_ACCOUNT_ID=<account-id>                               # REST only (X-SKY
   to extract or store a separate token list between the two calls.
 - **Entity selection is optional.** Omit it to detect everything, or scope it with `setEntities`.
 - **Keep the round-trip stateless per call.** De-identify, run, and re-identify within the same tool
-  invocation — don't rely on cross-request server state to hold tokens.
+  invocation, and don't hold tokens in local server memory. You don't need to: with `VAULT_TOKEN`,
+  the token↔value mapping lives in the vault, so re-identify still resolves the original values in a
+  later call or a separate process.
 - **Same vault both ways.** Re-identify against the vault that minted the tokens.
 
 ## Reference & next steps
