@@ -154,22 +154,24 @@ If you also want the structured breakdown of what was detected, `deidentifyText`
 
 ### 3. Wrap a tool call
 
-Here is a generic MCP tool (using the official MCP SDK's `registerTool`) that calls an external
-API. The only additions are the `deidentify` on the way in and `reidentify` on the way out:
+Here is a generic MCP tool (using the official MCP SDK's `registerTool`) that forwards text to a
+third-party service — say a summarizer or an LLM — and returns text derived from it. The only
+additions are the `deidentify` on the way in and `reidentify` on the way out:
 
 ```ts
 server.registerTool(
-  "search",
-  { title: "Search", description: "...", inputSchema: { query: z.string() } },
-  async ({ query }) => {
-    // 1. De-identify the request — the third-party API only ever sees tokens.
-    const safeQuery = await deidentify(query);
+  "summarize",
+  { title: "Summarize", description: "...", inputSchema: { text: z.string() } },
+  async ({ text }) => {
+    // 1. De-identify the request — the third-party service only ever sees tokens.
+    const safeText = await deidentify(text);
 
-    // 2. Run your existing logic on the tokenized text.
-    const results = await callExternalApi(safeQuery);
+    // 2. Run your existing logic on the tokenized text. The tokens flow through
+    //    into the summary the service returns.
+    const summary = await callThirdPartyLlm(safeText);
 
     // 3. Re-identify the response — restore real values for the trusted caller.
-    const restored = await reidentify(JSON.stringify(results));
+    const restored = await reidentify(summary);
 
     return { content: [{ type: "text", text: restored }] };
   }
@@ -177,6 +179,13 @@ server.registerTool(
 ```
 
 That is the whole integration: two helper calls bracketing logic you already have.
+
+> **Note:** Re-identify only restores tokens that actually appear in the downstream response, so it
+> shines for tools whose output is derived from the input — summarize, translate, draft-a-reply,
+> data enrichment — where the tokens flow through. For a tool like **search**, the provider returns
+> matched documents rather than an echo of your query, so re-identifying the results is often a
+> no-op; there the win is on the **request** side (PII in your search terms never reaches the third
+> party), while re-identify still restores any tokens that do surface in the results.
 
 ### Optional: limit detection to specific entities
 
