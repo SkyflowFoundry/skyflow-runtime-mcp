@@ -70,8 +70,8 @@ You need a Skyflow vault and its connection details. All of these come from the 
 
 | Value | Example | Notes |
 |-------|---------|-------|
-| Vault ID | `ebfc9bee4242abcd` | The vault identifier. |
-| Vault URL | `https://ebfc9bee4242.vault.skyflowapis.com` | The **cluster ID** is the first DNS label (`ebfc9bee4242`). |
+| Vault ID | `9a8b7c6d5e4f0011` | The vault identifier — a separate value from the cluster ID. |
+| Vault URL | `https://ebfc9bee4242.vault.skyflowapis.com` | The **cluster ID** is the first DNS label (`ebfc9bee4242`), derived from this URL. |
 | Credential | API key **or** bearer token (JWT) | See [Credentials & configuration](#credentials--configuration). |
 | Account ID | `abc123...` | Only needed for the **REST** approach (`X-SKYFLOW-ACCOUNT-ID` header). The SDK does not use it. |
 
@@ -114,7 +114,9 @@ const skyflow = new Skyflow({
 
 The guard fails loudly on a missing or malformed vault URL instead of silently passing `undefined`
 as the cluster ID — the same thing this repo does in `extractClusterId` / `validateVaultConfig`
-(`src/lib/validation/vaultConfig.ts`).
+(`src/lib/validation/vaultConfig.ts`). Give the other required env vars (`SKYFLOW_VAULT_ID`,
+`SKYFLOW_API_KEY`) the same fail-loudly treatment in production; the `!` assertions above are just
+to keep the snippet short.
 
 ### 2. Two small helpers
 
@@ -259,7 +261,7 @@ Skyflow accepts two credential formats, and this repo's middleware
 A minimal set of environment variables for your own server:
 
 ```bash
-SKYFLOW_VAULT_ID=ebfc9bee4242abcd
+SKYFLOW_VAULT_ID=9a8b7c6d5e4f0011                            # distinct from the cluster ID below
 SKYFLOW_VAULT_URL=https://ebfc9bee4242.vault.skyflowapis.com  # cluster ID derived from this
 SKYFLOW_API_KEY=<your-api-key>                                # or a bearer token
 SKYFLOW_ACCOUNT_ID=<account-id>                               # REST only (X-SKYFLOW-ACCOUNT-ID)
