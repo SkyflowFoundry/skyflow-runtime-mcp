@@ -332,6 +332,7 @@ After updating the config:
 
 ## Learn More
 
+- [Wrapping Your MCP Tools with Skyflow](docs/wrapping-mcp-tools-with-skyflow.md) — de-identify requests / re-identify responses inside your own MCP server
 - [Model Context Protocol Documentation](https://modelcontextprotocol.io)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [Streamable HTTP Transport Guide](https://modelcontextprotocol.io/docs/concepts/transports#streamable-http)
