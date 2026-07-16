@@ -160,6 +160,11 @@ serialized JSON blob) straight to `reidentify` — there is no separate token li
 If you also want the structured breakdown of what was detected, `deidentifyText` returns
 `res.entities[]`, where each entry has `{ token, value, entity, textIndex, processedIndex, scores }`.
 
+> **Note:** These helpers omit error handling for brevity. In production, wrap the Detect
+> calls and handle `SkyflowError` (invalid credentials, expired token, vault errors) the way
+> the repo handlers do — catching it and surfacing `http_code` / `details`
+> (`src/lib/tools/deIdentify.ts`).
+
 ### 3. Wrap a tool call
 
 Here is a generic MCP tool (using the official MCP SDK's `registerTool`) that forwards text to a
