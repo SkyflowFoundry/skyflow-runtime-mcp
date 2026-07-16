@@ -279,7 +279,11 @@ curl -X POST "https://$CLUSTER_ID.vault.skyflowapis.com/v1/detect/reidentify/str
 { "text": "email john.doe@example.com about order 12345" }
 ```
 
-Note the re-identify response field is `text`, while de-identify returns `processed_text`.
+Note the re-identify response field is `text`, while de-identify returns `processed_text` — an
+asymmetry in the raw v1 wire format. The `skyflow-node` SDK (Approach A) smooths this over: it
+surfaces both as `processedText`, and exposes each detected entity with `entity` / `scores` /
+`textIndex` / `processedIndex` fields rather than the wire's `entity_type` / `entity_scores` /
+`location`.
 
 > [!NOTE]
 > These are the generally-available **v1** endpoints. Skyflow also has a **v2** Detect API (in beta,
