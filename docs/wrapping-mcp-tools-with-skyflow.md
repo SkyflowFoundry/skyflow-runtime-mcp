@@ -73,7 +73,6 @@ You need a Skyflow vault and its connection details. All of these come from the 
 | Vault ID | `9a8b7c6d5e4f0011` | The vault identifier — a separate value from the cluster ID. |
 | Vault URL | `https://ebfc9bee4242.vault.skyflowapis.com` | The **cluster ID** is the first DNS label (`ebfc9bee4242`), derived from this URL. |
 | Credential | API key **or** bearer token (JWT) | See [Credentials & configuration](#credentials--configuration). |
-| Account ID | `abc123...` | Only needed for the **REST** approach (`X-SKYFLOW-ACCOUNT-ID` header). The SDK does not use it. |
 
 Derive the cluster ID from the vault URL exactly the way this repo does
 (`src/lib/validation/vaultConfig.ts`):
@@ -218,36 +217,73 @@ reference list. Common values include `email_address`, `ssn`, `credit_card`, `na
 
 ## Approach B — Detect REST API (any language)
 
-The SDK is a thin wrapper over Skyflow's Detect REST API, so any language can integrate the same
-way over plain HTTP. De-identify text with a `POST` to the deidentify endpoint:
+The SDK just wraps Skyflow's **Detect REST API**, so any language can run the same round-trip over
+plain HTTP. Each call is a single `POST` to your vault's cluster host
+(`https://<CLUSTER_ID>.vault.skyflowapis.com`) with an `Authorization: Bearer <token>` header — no
+other custom headers are required.
+
+**De-identify** — `POST /v1/detect/deidentify/string`:
 
 ```bash
-# ILLUSTRATIVE — confirm the endpoint path, headers, and body fields against the
-# Skyflow Detect API reference (link below) before using this in real code.
-curl -X POST "https://<CLUSTER_ID>.vault.skyflowapis.com/v1/detect/deidentify/string" \
-  -H "Authorization: Bearer <API_KEY_OR_BEARER_TOKEN>" \
-  -H "X-SKYFLOW-ACCOUNT-ID: <ACCOUNT_ID>" \
+curl -X POST "https://$CLUSTER_ID.vault.skyflowapis.com/v1/detect/deidentify/string" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "vault_id": "<VAULT_ID>",
+    "vault_id": "'"$VAULT_ID"'",
     "text": "email john.doe@example.com about order 12345",
-    "entity_types": ["all"],
     "token_type": { "default": "vault_token" }
   }'
 ```
 
-The response contains the tokenized `processed_text` plus the detected entities. You then re-identify
-by sending the tokenized text to the corresponding reidentify endpoint with the same
-authentication headers.
+```json
+{
+  "processed_text": "email [EMAIL_ADDRESS_a1b2] about order 12345",
+  "entities": [
+    {
+      "token": "[EMAIL_ADDRESS_a1b2]",
+      "value": "john.doe@example.com",
+      "entity_type": "email_address",
+      "entity_scores": { "email_address": 0.99 },
+      "location": { "start": 6, "end": 26 }
+    }
+  ],
+  "word_count": 5,
+  "character_count": 44
+}
+```
 
-> [!WARNING]
-> The REST shapes here are **illustrative and unverified** — confirm them against the official
-> [Skyflow Detect API reference](https://docs.skyflow.com/detect/) before shipping. In particular,
-> verify the endpoint path (`/v1/detect/deidentify/string`), the `entity_types` and `token_type`
-> body fields, whether the `X-SKYFLOW-ACCOUNT-ID` header is required, and the **reidentify** request
-> body (not shown here). When you have a Node runtime, prefer
-> [Approach A](#approach-a--skyflow-node-sdk-recommended) — it keeps you insulated from these
-> details.
+`text` and `vault_id` are required. `token_type.default` picks the token type — `vault_token` for the
+reversible round-trip, or `entity_unq_counter` / `entity_only` for one-way redaction. Add an optional
+`entity_types` array to scope detection; its values are the same lowercase names as the SDK's
+`ENTITY_MAP` keys (`email_address`, `ssn`, `name`, …, or `all`). Omit it to detect everything.
+
+**Re-identify** — `POST /v1/detect/reidentify/string`. Send the tokenized text back with the same
+vault and it resolves the tokens:
+
+```bash
+curl -X POST "https://$CLUSTER_ID.vault.skyflowapis.com/v1/detect/reidentify/string" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vault_id": "'"$VAULT_ID"'",
+    "text": "email [EMAIL_ADDRESS_a1b2] about order 12345"
+  }'
+```
+
+```json
+{ "text": "email john.doe@example.com about order 12345" }
+```
+
+Note the re-identify response field is `text`, while de-identify returns `processed_text`.
+
+> [!NOTE]
+> These are the generally-available **v1** endpoints. Skyflow also has a **v2** Detect API (in beta,
+> feature-flagged) that uses `camelCase` fields and a reusable Detect *configuration* instead of
+> per-request options — see the [Detect API reference](https://docs.skyflow.com/detect/). `$TOKEN`
+> is a Skyflow bearer token (an API key also works); generate a bearer token from service-account
+> credentials via the Management API OAuth exchange (`POST /v1/auth/sa/oauth/token`). With a Node
+> runtime, prefer [Approach A](#approach-a--skyflow-node-sdk-recommended) — it handles auth and
+> token refresh for you.
 
 ## Credentials & configuration
 
@@ -264,7 +300,6 @@ A minimal set of environment variables for your own server:
 SKYFLOW_VAULT_ID=9a8b7c6d5e4f0011                            # distinct from the cluster ID below
 SKYFLOW_VAULT_URL=https://ebfc9bee4242.vault.skyflowapis.com  # cluster ID derived from this
 SKYFLOW_API_KEY=<your-api-key>                                # or a bearer token
-SKYFLOW_ACCOUNT_ID=<account-id>                               # REST only (X-SKYFLOW-ACCOUNT-ID)
 ```
 
 ## Gotchas
