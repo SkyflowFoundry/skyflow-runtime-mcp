@@ -112,6 +112,8 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 - Tool files: `deIdentify.ts`, `reIdentify.ts`, `deIdentifyFile.ts`
 - This separation enables unit testing without `AsyncLocalStorage` context
 
+See `docs/wrapping-mcp-tools-with-skyflow.md` for a guide on how outside developers can embed these same de-identify/re-identify Skyflow calls (via the `skyflow-node` SDK or the Detect REST API) inside their own MCP server's tools.
+
 ### Type Safety Approach
 
 The codebase uses explicit mapping objects to convert string inputs to enum values:
