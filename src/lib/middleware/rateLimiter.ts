@@ -28,10 +28,15 @@ export function getClientId(req: Request): string {
   // Left-most IPs are client-controlled and can be spoofed to bypass rate limiting.
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) {
-    const ips = Array.isArray(forwarded)
-      ? forwarded[forwarded.length - 1]
-      : forwarded.split(",").pop()!;
-    return ips.trim();
+    // Normalize both forms — a repeated header (array) and a comma-delimited
+    // list — so the rightmost entry is always a single address.
+    const entries = (Array.isArray(forwarded) ? forwarded : [forwarded]).flatMap(
+      (value) => value.split(",")
+    );
+    const rightmost = entries[entries.length - 1]?.trim();
+    if (rightmost) {
+      return rightmost;
+    }
   }
 
   // Fall back to direct IP
@@ -56,23 +61,34 @@ const cleanupInterval = setInterval(cleanupExpiredEntries, CLEANUP_INTERVAL_MS);
 // Allow cleanup interval to not prevent process exit
 cleanupInterval.unref();
 
+interface RateLimiterOptions {
+  /** Namespace for store keys so different limiters don't collide */
+  keyPrefix: string;
+  /** Return true to bypass rate limiting for this request */
+  skip?: (req: Request) => boolean;
+  /** Body for the 429 response */
+  errorBody: (retryAfterSeconds: number) => Record<string, unknown>;
+}
+
 /**
- * Create rate limiter middleware for anonymous mode
- * Only applies rate limiting to requests where req.isAnonymousMode is true
+ * Create a generic per-client-IP rate limiter middleware.
+ * Shared implementation behind the anonymous-mode and token-endpoint limiters.
  */
-export function createAnonymousRateLimiter(config: RateLimiterConfig) {
-  return function anonymousRateLimiter(
+function createIpRateLimiter(
+  config: RateLimiterConfig,
+  options: RateLimiterOptions
+) {
+  return function ipRateLimiter(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
-    // Only apply rate limiting to anonymous mode requests
-    if (!req.isAnonymousMode) {
+    if (options.skip?.(req)) {
       return next();
     }
 
     const clientId = getClientId(req);
-    const key = `anon:${clientId}`;
+    const key = `${options.keyPrefix}:${clientId}`;
     const now = Date.now();
 
     let entry = rateLimitStore.get(key);
@@ -94,14 +110,7 @@ export function createAnonymousRateLimiter(config: RateLimiterConfig) {
       res.setHeader("X-RateLimit-Limit", config.maxRequests);
       res.setHeader("X-RateLimit-Remaining", 0);
       res.setHeader("X-RateLimit-Reset", resetSeconds);
-      return res.status(429).json({
-        error: "Rate limit exceeded for anonymous mode",
-        message:
-          "You have exceeded the rate limit for anonymous mode. " +
-          "Please try again later or configure your Skyflow credentials for unlimited access.",
-        retryAfterSeconds: resetSeconds,
-        helpUrl: "https://docs.skyflow.com/",
-      });
+      return res.status(429).json(options.errorBody(resetSeconds));
     }
 
     // Request allowed - increment count AFTER the check
@@ -115,6 +124,72 @@ export function createAnonymousRateLimiter(config: RateLimiterConfig) {
 
     next();
   };
+}
+
+/**
+ * Create rate limiter middleware for anonymous mode
+ * Only applies rate limiting to requests where req.isAnonymousMode is true
+ */
+export function createAnonymousRateLimiter(config: RateLimiterConfig) {
+  return createIpRateLimiter(config, {
+    keyPrefix: "anon",
+    skip: (req) => !req.isAnonymousMode,
+    errorBody: (retryAfterSeconds) => ({
+      error: "Rate limit exceeded for anonymous mode",
+      message:
+        "You have exceeded the rate limit for anonymous mode. " +
+        "Please try again later or configure your Skyflow credentials for unlimited access.",
+      retryAfterSeconds,
+      helpUrl: "https://docs.skyflow.com/",
+    }),
+  });
+}
+
+/**
+ * Create rate limiter middleware for the enterprise auth /token endpoint.
+ * The endpoint is unauthenticated by design (clients present ID-JAGs), so a
+ * per-IP limit bounds how fast a caller can drive signature verifications.
+ * Errors follow the RFC 6749 §5.2 body shape used by the endpoint itself.
+ */
+export function createTokenEndpointRateLimiter(config: RateLimiterConfig) {
+  return createIpRateLimiter(config, {
+    keyPrefix: "token",
+    errorBody: (retryAfterSeconds) => ({
+      error: "rate_limit_exceeded",
+      error_description: `Too many token requests. Try again in ${retryAfterSeconds} seconds.`,
+    }),
+  });
+}
+
+/**
+ * Get token endpoint rate limit configuration from environment variables
+ * @throws Error if environment variables contain invalid values
+ */
+export function getTokenEndpointRateLimitConfig(
+  env: NodeJS.ProcessEnv = process.env
+): RateLimiterConfig {
+  // Strict digits-only parse: parseInt would silently accept "30abc"
+  const parseStrict = (raw: string): number =>
+    /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+  const maxRequests = parseStrict(
+    (env.ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS || "30").trim()
+  );
+  const windowMs = parseStrict(
+    (env.ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS || "60000").trim()
+  );
+
+  if (isNaN(maxRequests) || maxRequests <= 0) {
+    throw new Error(
+      "Invalid ENTERPRISE_TOKEN_RATE_LIMIT_REQUESTS: must be a positive integer"
+    );
+  }
+  if (isNaN(windowMs) || windowMs <= 0) {
+    throw new Error(
+      "Invalid ENTERPRISE_TOKEN_RATE_LIMIT_WINDOW_MS: must be a positive integer"
+    );
+  }
+
+  return { maxRequests, windowMs };
 }
 
 /**

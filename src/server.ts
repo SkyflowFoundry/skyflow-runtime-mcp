@@ -20,6 +20,15 @@ import { handleDeIdentify } from "./lib/tools/deIdentify.js";
 import { handleReIdentify } from "./lib/tools/reIdentify.js";
 import { toStructuredContent } from "./lib/tools/types.js";
 import { authenticateBearer } from "./lib/middleware/authenticateBearer.js";
+import { createEnterpriseAuthMiddleware } from "./lib/middleware/enterpriseAuth.js";
+import { createEnterpriseAuthRouter } from "./lib/auth/routes.js";
+import { loadEnterpriseAuthConfig } from "./lib/auth/config.js";
+import type { EnterpriseIdentity } from "./lib/auth/accessTokens.js";
+import {
+  parseGrantedScopes,
+  isToolPermitted,
+  buildScopeDenial,
+} from "./lib/auth/scopes.js";
 import {
   createAnonymousRateLimiter,
   getAnonymousRateLimitConfig,
@@ -33,6 +42,8 @@ interface RequestContext {
   skyflow: Skyflow;
   vaultId: string;
   isAnonymousMode: boolean;
+  /** Scopes granted by the enterprise access token; undefined = unrestricted */
+  enterpriseScopes?: string[];
 }
 
 const requestContextStorage = new AsyncLocalStorage<RequestContext>();
@@ -57,6 +68,26 @@ function isAnonymousMode(): boolean {
     throw new Error("No request context available");
   }
   return context.isAnonymousMode;
+}
+
+/**
+ * Enforce enterprise token scopes at the tool level. When the current
+ * request's enterprise access token carries a scope claim, each scope names
+ * a permitted tool; tokens without a scope claim (and non-enterprise
+ * requests) are unrestricted. Returns a ready-to-return isError tool result
+ * when the tool is denied, or null when permitted.
+ */
+function scopeDenialFor(toolName: string) {
+  const scopes = requestContextStorage.getStore()?.enterpriseScopes;
+  if (isToolPermitted(toolName, scopes)) {
+    return null;
+  }
+  const output = buildScopeDenial(toolName, scopes!);
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(output) }],
+    structuredContent: toStructuredContent(output),
+    isError: true as const,
+  };
 }
 
 // Create an MCP server
@@ -125,6 +156,8 @@ registerAppTool(
     _meta: { ui: { resourceUri: DE_IDENTIFY_RESOURCE_URI } },
   },
   async ({ inputString, entities }) => {
+    const denial = scopeDenialFor("de-identify");
+    if (denial) return denial;
     const result = await handleDeIdentify(inputString, entities, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
@@ -159,6 +192,8 @@ registerAppTool(
     _meta: { ui: { resourceUri: RE_IDENTIFY_RESOURCE_URI } },
   },
   async ({ inputString }) => {
+    const denial = scopeDenialFor("re-identify");
+    if (denial) return denial;
     const result = await handleReIdentify(inputString, getCurrentSkyflow(), isAnonymousMode());
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
@@ -169,10 +204,50 @@ registerAppTool(
 );
 
 const app: Express = express();
+
+// Enterprise-managed authorization (MCP extension
+// io.modelcontextprotocol/enterprise-managed-authorization): OAuth discovery
+// metadata and the ID-JAG token endpoint. All routes 404 unless
+// ENTERPRISE_AUTH_ENABLED=true. Mounted BEFORE the 5MB JSON parser so the
+// unauthenticated /token endpoint only ever parses its own small
+// form-urlencoded bodies.
+app.use(createEnterpriseAuthRouter());
+
 app.use(express.json({ limit: "5mb" })); // Limit for base64-encoded files
 
 // Serve static files from the public directory
 app.use(express.static("public"));
+
+// Surface enterprise auth status/misconfiguration at startup. A misconfigured
+// deployment still fails closed per-request (the middleware returns 500).
+try {
+  const enterpriseConfig = loadEnterpriseAuthConfig();
+  if (enterpriseConfig) {
+    console.log(
+      `Enterprise-managed authorization enabled (${enterpriseConfig.mode} mode, IdP: ${enterpriseConfig.idpIssuer})`
+    );
+    if (enterpriseConfig.mode === "required") {
+      console.log(
+        "Enterprise auth mode is 'required': /mcp requests carrying direct Skyflow credentials " +
+          "in the Authorization header will be rejected with 401. Set ENTERPRISE_AUTH_MODE=optional " +
+          "to keep accepting them alongside enterprise tokens."
+      );
+    }
+    if (!process.env.SKYFLOW_API_KEY && process.env.ANON_MODE_API_KEY) {
+      console.warn(
+        "Enterprise auth is enabled without SKYFLOW_API_KEY while anonymous mode is configured: " +
+          "enterprise-authenticated requests that carry no Skyflow credentials will degrade to " +
+          "anonymous mode (non-persisted tokens, re-identify unavailable). Set SKYFLOW_API_KEY " +
+          "to give enterprise users real vault access."
+      );
+    }
+  }
+} catch (error) {
+  console.error(
+    "Enterprise-managed authorization is misconfigured:",
+    error instanceof Error ? error.message : error
+  );
+}
 
 // Create rate limiter for anonymous mode
 const anonymousRateLimiter = createAnonymousRateLimiter(
@@ -186,11 +261,13 @@ declare global {
       skyflowCredentials?: { token: string } | { apiKey: string };
       isAnonymousMode: boolean; // Always set by authenticateBearer middleware
       anonVaultConfig?: { vaultId: string; vaultUrl: string };
+      enterpriseAuth?: EnterpriseIdentity; // Set when enterprise auth verified the request
+      skyflowCredentialsSource?: "header" | "env"; // Where enterprise auth resolved Skyflow credentials from
     }
   }
 }
 
-app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
+app.post("/mcp", createEnterpriseAuthMiddleware(), authenticateBearer, anonymousRateLimiter, async (req, res) => {
   // Determine vault configuration based on mode
   let vaultId: string | undefined;
   let vaultUrl: string | undefined;
@@ -202,7 +279,30 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
   const hasPlaceholderParams =
     looksLikePlaceholder(queryVaultId) || looksLikePlaceholder(queryVaultUrl);
 
-  if (hasPlaceholderParams && !req.isAnonymousMode) {
+  // Enterprise requests using the SERVER's service credential ignore
+  // unsubstituted placeholder params in favor of the env vault config — the
+  // deployment's credential and vault belong together. Per-user credentials
+  // (X-Skyflow-Authorization) are NOT paired with the server's vault: we
+  // don't know which vault they belong to.
+  const usesEnvVaultFallback =
+    hasPlaceholderParams &&
+    req.enterpriseAuth !== undefined &&
+    req.skyflowCredentialsSource === "env" &&
+    !!process.env.VAULT_ID &&
+    !!process.env.VAULT_URL;
+
+  if (hasPlaceholderParams && !req.isAnonymousMode && !usesEnvVaultFallback) {
+    if (req.enterpriseAuth) {
+      // Enterprise-authenticated requests never demote to the anonymous
+      // vault via the placeholder path; a broken vault template alongside
+      // per-user credentials is a client configuration error.
+      return res.status(400).json({
+        error:
+          "Configuration error: vaultId/vaultUrl query parameters contain unsubstituted placeholders " +
+          "(e.g. ${SKYFLOW_VAULT_ID}). Fix the client's URL template or configure VAULT_ID/VAULT_URL " +
+          "with SKYFLOW_API_KEY on the server.",
+      });
+    }
     // Query params contain placeholders - check if anonymous mode is available as fallback
     const anonApiKey = process.env.ANON_MODE_API_KEY;
     const anonVaultId = process.env.ANON_MODE_VAULT_ID;
@@ -228,6 +328,11 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
     // Use anonymous mode configuration
     vaultId = req.anonVaultConfig.vaultId;
     vaultUrl = req.anonVaultConfig.vaultUrl;
+  } else if (usesEnvVaultFallback) {
+    // Placeholder query params from an enterprise client: use the
+    // server-side vault configuration instead
+    vaultId = process.env.VAULT_ID;
+    vaultUrl = process.env.VAULT_URL;
   } else {
     // Use client-provided or environment configuration
     vaultId = (req.query.vaultId as string) || process.env.VAULT_ID;
@@ -287,6 +392,7 @@ app.post("/mcp", authenticateBearer, anonymousRateLimiter, async (req, res) => {
       skyflow: skyflowInstance,
       vaultId: validatedVaultId,
       isAnonymousMode: useAnonymousMode,
+      enterpriseScopes: parseGrantedScopes(req.enterpriseAuth?.scope),
     },
     async () => {
       await server.connect(transport);
