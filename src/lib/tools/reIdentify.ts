@@ -116,6 +116,10 @@ export async function handleReIdentify(
       };
     }
 
+    // The server inputSchema already enum-constrains entity names, but this
+    // handler is a standalone, independently-testable function and must not
+    // assume the caller pre-validated — re-validate so a direct call (or a
+    // future caller that skips the schema) still gets a clean client-side error.
     const invalidEntities = findInvalidEntities(format);
     if (invalidEntities.length > 0) {
       return {
