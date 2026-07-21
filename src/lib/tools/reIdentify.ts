@@ -1,6 +1,6 @@
 import { ReidentifyTextOptions, ReidentifyTextRequest, SkyflowError } from "skyflow-node";
 import type { Skyflow } from "skyflow-node";
-import { getEntityEnum } from "../mappings/entityMaps.js";
+import { getEntityEnum, isValidEntity } from "../mappings/entityMaps.js";
 import type { ReIdentifyFormat, ReIdentifyOutput, ReIdentifyErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
 
 /** The three re-identification treatment buckets, in output order. */
@@ -21,6 +21,21 @@ function normalizeFormat(format: ReIdentifyFormat): ReIdentifyFormat {
     }
   }
   return normalized;
+}
+
+/**
+ * Collect any entity types in the format that are not recognized. Returned so
+ * an invalid name can be reported as a client-side validation error (before any
+ * Skyflow call), distinct in shape from a Skyflow API error.
+ */
+function findInvalidEntities(format: ReIdentifyFormat): string[] {
+  const invalid = new Set<string>();
+  for (const bucket of FORMAT_BUCKETS) {
+    for (const entity of format[bucket] ?? []) {
+      if (!isValidEntity(entity)) invalid.add(entity);
+    }
+  }
+  return [...invalid];
 }
 
 /**
@@ -96,6 +111,19 @@ export async function handleReIdentify(
           message:
             "Each entity type may appear in only one format bucket (redacted, masked, or plaintext). " +
             `The following appear in more than one: ${overlaps.join(", ")}.`,
+        },
+        isError: true,
+      };
+    }
+
+    const invalidEntities = findInvalidEntities(format);
+    if (invalidEntities.length > 0) {
+      return {
+        output: {
+          error: true,
+          message:
+            `Invalid entity type(s) in format: ${invalidEntities.join(", ")}. ` +
+            "Use the same lowercase entity names as the de-identify tool.",
         },
         isError: true,
       };

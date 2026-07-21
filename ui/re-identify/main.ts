@@ -188,7 +188,7 @@ function renderFormatSummary(format: NonNullable<ReIdentifyResult["format"]>): s
     .join("");
 
   return `
-    <div class="section-heading">Format Applied</div>
+    <div class="section-heading">Requested Format</div>
     <div class="format-summary">${groupsHtml}</div>
   `;
 }

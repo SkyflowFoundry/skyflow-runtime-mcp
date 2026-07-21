@@ -220,6 +220,9 @@ describe("handleReIdentify", () => {
       expect(result.isError).toBe(true);
       expect(output.error).toBe(true);
       expect(output.message).toContain("Invalid entity type");
+      // Client-side validation error: no HTTP code, so it is distinguishable
+      // from a Skyflow API error (which carries `code`).
+      expect(output.code).toBeUndefined();
       expect(mockReidentifyText).not.toHaveBeenCalled();
     });
   });
