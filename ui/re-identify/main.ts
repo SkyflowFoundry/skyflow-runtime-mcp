@@ -161,6 +161,8 @@ function highlightValuesInOutput(text: string, mappings: TokenMapping[]): string
 }
 
 function renderFormatSummary(format: NonNullable<ReIdentifyResult["format"]>): string {
+  // Ordered least- to most-restrictive (revealed -> hidden) for readability;
+  // this intentionally differs from the handler's FORMAT_BUCKETS order.
   const groups: { label: string; entities: string[] }[] = [
     { label: "Plaintext", entities: format.plaintext || [] },
     { label: "Masked", entities: format.masked || [] },

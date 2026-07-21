@@ -160,7 +160,7 @@ registerAppTool(
           plaintext: z
             .array(z.enum(ENTITY_KEYS))
             .optional()
-            .describe("Entity types to fully restore to their original plaintext value."),
+            .describe("Entity types to fully restore to their original plaintext value. This is already the default for any unlisted entity type, so listing here is only for explicitness."),
         })
         .optional()
         .describe(
