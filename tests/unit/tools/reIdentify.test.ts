@@ -145,12 +145,12 @@ describe("handleReIdentify", () => {
       expect(output.format).toEqual(format);
     });
 
-    it("should echo an empty format object back when provided with no entities", async () => {
+    it("should omit format from the output when provided with no entities", async () => {
       const skyflow = createMockSkyflow({ processedText: "restored" });
       const result = await handleReIdentify("input", skyflow as any, false, {});
       const output = result.output as ReIdentifyOutput;
 
-      expect(output.format).toEqual({});
+      expect(output).not.toHaveProperty("format");
     });
 
     it("should drop empty buckets from the echoed format", async () => {
@@ -180,15 +180,34 @@ describe("handleReIdentify", () => {
       expect(mockReidentifyText).not.toHaveBeenCalled();
     });
 
-    it("should allow the same entity listed twice within a single bucket", async () => {
+    it("should de-duplicate an entity listed twice within a single bucket", async () => {
       const skyflow = createMockSkyflow({ processedText: "restored" });
       const result = await handleReIdentify("input", skyflow as any, false, {
         masked: ["ssn", "ssn"],
       });
+      const output = result.output as ReIdentifyOutput;
 
-      // A duplicate within one bucket is not a cross-bucket conflict
+      // A duplicate within one bucket is not a cross-bucket conflict, and it is
+      // collapsed before reaching the SDK and the echoed format.
       expect(result.isError).toBeUndefined();
-      expect(mockSetMaskedEntities).toHaveBeenCalledWith(["ssn", "ssn"]);
+      expect(mockSetMaskedEntities).toHaveBeenCalledWith(["ssn"]);
+      expect(output.format).toEqual({ masked: ["ssn"] });
+    });
+
+    it("should reject an overlap before validating entity names (overlap guard runs first)", async () => {
+      const skyflow = createMockSkyflow({ processedText: "restored" });
+      const result = await handleReIdentify("input", skyflow as any, false, {
+        redacted: ["not_a_real_entity"],
+        masked: ["not_a_real_entity"],
+      });
+      const output = result.output as ReIdentifyErrorOutput;
+
+      // The overlap guard runs before getEntityEnum, so the error is about the
+      // bucket conflict, not the invalid entity name.
+      expect(result.isError).toBe(true);
+      expect(output.message).toContain("only one format bucket");
+      expect(output.message).not.toContain("Invalid entity type");
+      expect(mockReidentifyText).not.toHaveBeenCalled();
     });
 
     it("should return an error for an invalid entity type in the format", async () => {

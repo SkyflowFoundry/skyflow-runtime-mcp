@@ -177,7 +177,7 @@ registerAppTool(
           plaintext: z.array(z.string()).optional(),
         })
         .optional()
-        .describe("The re-identification format that was applied, echoed back when provided"),
+        .describe("The re-identification format the caller requested, normalized (empty buckets dropped) and echoed back when provided"),
       error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
       anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
       message: z.string().optional().describe("Detailed error or setup instructions"),

@@ -38,7 +38,7 @@ export interface ReIdentifyFormat {
 export interface ReIdentifyOutput {
   inputText: string;
   processedText: string;
-  /** The re-identification format that was applied, echoed back when provided. */
+  /** The re-identification format the caller requested (normalized), echoed back when provided. */
   format?: ReIdentifyFormat;
 }
 

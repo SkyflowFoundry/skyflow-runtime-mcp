@@ -3,35 +3,24 @@ import type { Skyflow } from "skyflow-node";
 import { getEntityEnum } from "../mappings/entityMaps.js";
 import type { ReIdentifyFormat, ReIdentifyOutput, ReIdentifyErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
 
+/** The three re-identification treatment buckets, in output order. */
+const FORMAT_BUCKETS = ["redacted", "masked", "plaintext"] as const;
+
 /**
- * Build Skyflow re-identify options from the tool's `format` argument.
- * Only buckets containing at least one entity type are set, so an empty or
- * absent bucket falls back to the API default (plaintext re-identification).
- * Returns `undefined` when no entity types are specified, so the SDK is called
- * without options and every token is fully re-identified (the default behavior).
+ * Reduce a format to only the buckets that carry entity types, de-duplicating
+ * within each bucket and dropping empty/absent buckets. The result is what gets
+ * forwarded to the SDK and echoed back, so both stay in lockstep and neither
+ * carries empty arrays or redundant entries.
  */
-function buildReidentifyOptions(
-  format: ReIdentifyFormat | undefined
-): ReidentifyTextOptions | undefined {
-  if (!format) return undefined;
-
-  const options = new ReidentifyTextOptions();
-  let hasAny = false;
-
-  if (format.redacted && format.redacted.length > 0) {
-    options.setRedactedEntities(format.redacted.map(getEntityEnum));
-    hasAny = true;
+function normalizeFormat(format: ReIdentifyFormat): ReIdentifyFormat {
+  const normalized: ReIdentifyFormat = {};
+  for (const bucket of FORMAT_BUCKETS) {
+    const entities = format[bucket];
+    if (entities && entities.length > 0) {
+      normalized[bucket] = [...new Set(entities)];
+    }
   }
-  if (format.masked && format.masked.length > 0) {
-    options.setMaskedEntities(format.masked.map(getEntityEnum));
-    hasAny = true;
-  }
-  if (format.plaintext && format.plaintext.length > 0) {
-    options.setPlainTextEntities(format.plaintext.map(getEntityEnum));
-    hasAny = true;
-  }
-
-  return hasAny ? options : undefined;
+  return normalized;
 }
 
 /**
@@ -42,8 +31,8 @@ function buildReidentifyOptions(
  */
 function findFormatOverlaps(format: ReIdentifyFormat): string[] {
   const bucketCount = new Map<string, number>();
-  for (const bucket of [format.redacted, format.masked, format.plaintext]) {
-    for (const entity of new Set(bucket ?? [])) {
+  for (const bucket of FORMAT_BUCKETS) {
+    for (const entity of new Set(format[bucket] ?? [])) {
       bucketCount.set(entity, (bucketCount.get(entity) ?? 0) + 1);
     }
   }
@@ -51,15 +40,20 @@ function findFormatOverlaps(format: ReIdentifyFormat): string[] {
 }
 
 /**
- * Reduce a format to only the buckets that actually carry entity types, so the
- * value echoed back in the response reflects what was applied (no empty arrays).
+ * Build Skyflow re-identify options from an already-normalized format.
+ * Returns `undefined` when no entity types are specified, so the SDK is called
+ * without options and every token is fully re-identified (the default behavior).
  */
-function normalizeFormat(format: ReIdentifyFormat): ReIdentifyFormat {
-  const normalized: ReIdentifyFormat = {};
-  if (format.redacted && format.redacted.length > 0) normalized.redacted = format.redacted;
-  if (format.masked && format.masked.length > 0) normalized.masked = format.masked;
-  if (format.plaintext && format.plaintext.length > 0) normalized.plaintext = format.plaintext;
-  return normalized;
+function buildReidentifyOptions(
+  normalized: ReIdentifyFormat
+): ReidentifyTextOptions | undefined {
+  if (Object.keys(normalized).length === 0) return undefined;
+
+  const options = new ReidentifyTextOptions();
+  if (normalized.redacted) options.setRedactedEntities(normalized.redacted.map(getEntityEnum));
+  if (normalized.masked) options.setMaskedEntities(normalized.masked.map(getEntityEnum));
+  if (normalized.plaintext) options.setPlainTextEntities(normalized.plaintext.map(getEntityEnum));
+  return options;
 }
 
 /**
@@ -108,8 +102,13 @@ export async function handleReIdentify(
     }
   }
 
+  // Normalize once: drops empty buckets and intra-bucket duplicates. The same
+  // value feeds the SDK options and the echoed-back format.
+  const normalizedFormat = format ? normalizeFormat(format) : undefined;
+  const hasFormat = normalizedFormat !== undefined && Object.keys(normalizedFormat).length > 0;
+
   try {
-    const options = buildReidentifyOptions(format);
+    const options = normalizedFormat ? buildReidentifyOptions(normalizedFormat) : undefined;
 
     const response = await skyflow
       .detect()
@@ -119,7 +118,7 @@ export async function handleReIdentify(
       output: {
         inputText: inputString,
         processedText: response.processedText,
-        ...(format && { format: normalizeFormat(format) }),
+        ...(hasFormat && { format: normalizedFormat }),
       },
     };
   } catch (error) {
