@@ -259,7 +259,7 @@ By default every token is fully restored to its original value. To control how
 individual entity types are rendered, pass an optional `format` object with any
 of `redacted`, `masked`, or `plaintext` — each a list of entity types (the same
 lowercase names as the `de-identify` tool, e.g. `ssn`, `email_address`). Entity
-types not listed default to full plaintext restoration:
+types not listed fall back to the Detect API's default and are restored as full plaintext:
 
 ```bash
 curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \

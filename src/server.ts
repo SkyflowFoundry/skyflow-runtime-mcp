@@ -144,7 +144,7 @@ registerAppTool(
   {
     title: "Skyflow Re-identify Tool",
     description:
-      "Re-identify previously de-identified sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data. Optionally pass a `format` object to control how each entity type is rendered on the way out — fully restore (plaintext), partially mask, or fully redact specific entity types. Entity types not listed default to full plaintext restoration.",
+      "Re-identify previously de-identified sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data. Optionally pass a `format` object to control how each entity type is rendered on the way out — fully restore (plaintext), partially mask, or fully redact specific entity types. Entity types not listed fall back to the Detect API's default and are restored as full plaintext (the same as re-identifying without a format).",
     inputSchema: {
       inputString: z.string().min(1).describe("Original Text — paste the tokenized text you want to restore"),
       format: z
@@ -156,7 +156,7 @@ registerAppTool(
           masked: z
             .array(z.enum(ENTITY_KEYS))
             .optional()
-            .describe("Entity types to partially mask — only part of the original value is revealed (e.g. an SSN shown as '***-**-6789')."),
+            .describe("Entity types to partially mask — only part of the original value is revealed. The exact masked form depends on the vault's masking configuration."),
           plaintext: z
             .array(z.enum(ENTITY_KEYS))
             .optional()
@@ -164,7 +164,7 @@ registerAppTool(
         })
         .optional()
         .describe(
-          "Optional per-entity-type re-identification format. List entity types under 'redacted', 'masked', or 'plaintext' to control how each is rendered. Any entity type not listed defaults to full plaintext restoration."
+          "Optional per-entity-type re-identification format. List entity types under 'redacted', 'masked', or 'plaintext' to control how each is rendered. Any entity type not listed falls back to the Detect API's default and is restored as full plaintext."
         ),
     },
     outputSchema: {

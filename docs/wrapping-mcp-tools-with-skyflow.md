@@ -224,15 +224,15 @@ reference list. Common values include `email_address`, `ssn`, `credit_card`, `na
 
 Re-identify fully restores every token by default. To render specific entity types differently on
 the way out — reveal some, partially mask others, fully redact the rest — pass a
-`ReidentifyTextOptions` as the second argument. Entity types you don't list default to full plaintext
-restoration:
+`ReidentifyTextOptions` as the second argument. Entity types you don't list fall back to the Detect
+API's default and are restored as full plaintext:
 
 ```ts
 import { ReidentifyTextOptions, DetectEntities } from "skyflow-node";
 
 const options = new ReidentifyTextOptions();
 options.setPlainTextEntities([DetectEntities.NAME]);      // restore in full
-options.setMaskedEntities([DetectEntities.SSN]);          // partially masked (e.g. ***-**-6789)
+options.setMaskedEntities([DetectEntities.SSN]);          // partially masked; exact form depends on vault config
 options.setRedactedEntities([DetectEntities.EMAIL_ADDRESS]); // fully hidden
 
 const res = await skyflow
@@ -304,7 +304,7 @@ curl -X POST "https://$CLUSTER_ID.vault.skyflowapis.com/v1/detect/reidentify/str
 
 `text` and `vault_id` are required. Add an optional `format` object to control how each entity type
 is rendered — `{ "redacted": [...], "masked": [...], "plaintext": [...] }`, each a list of the same
-lowercase entity names. Entity types you don't list default to full plaintext restoration:
+lowercase entity names. Entity types you don't list fall back to the Detect API's default and are restored as full plaintext:
 
 ```json
 {
