@@ -173,9 +173,9 @@ function renderFormatSummary(format: NonNullable<ReIdentifyResult["format"]>): s
     .map((g) => {
       const chips = g.entities
         .map((e) => {
-          const cls = getEntityClass(e.toUpperCase());
+          const cls = getEntityClass(e);
           const label = e.replace(/_/g, " ");
-          return `<span class="badge ${cls}"><span class="badge-dot" style="background: var(--entity-color)"></span>${escapeHtml(label)}</span>`;
+          return `<span class="badge ${cls}"><span class="badge-dot" style="background: var(--entity-color, var(--color-text-secondary, #9ca3af))"></span>${escapeHtml(label)}</span>`;
         })
         .join(" ");
       return `

@@ -35,6 +35,34 @@ function buildReidentifyOptions(
 }
 
 /**
+ * Find entity types that appear in more than one format bucket. Each entity type
+ * may only be rendered one way, so an entity listed under, say, both `redacted`
+ * and `masked` is ambiguous (the SDK would forward it to both setters with
+ * last-wins/undefined behavior). Duplicates within a single bucket are ignored.
+ */
+function findFormatOverlaps(format: ReIdentifyFormat): string[] {
+  const bucketCount = new Map<string, number>();
+  for (const bucket of [format.redacted, format.masked, format.plaintext]) {
+    for (const entity of new Set(bucket ?? [])) {
+      bucketCount.set(entity, (bucketCount.get(entity) ?? 0) + 1);
+    }
+  }
+  return [...bucketCount.entries()].filter(([, count]) => count > 1).map(([entity]) => entity);
+}
+
+/**
+ * Reduce a format to only the buckets that actually carry entity types, so the
+ * value echoed back in the response reflects what was applied (no empty arrays).
+ */
+function normalizeFormat(format: ReIdentifyFormat): ReIdentifyFormat {
+  const normalized: ReIdentifyFormat = {};
+  if (format.redacted && format.redacted.length > 0) normalized.redacted = format.redacted;
+  if (format.masked && format.masked.length > 0) normalized.masked = format.masked;
+  if (format.plaintext && format.plaintext.length > 0) normalized.plaintext = format.plaintext;
+  return normalized;
+}
+
+/**
  * Handle the re-identify tool logic.
  * Restores original sensitive data from de-identified placeholders.
  *
@@ -65,6 +93,21 @@ export async function handleReIdentify(
     };
   }
 
+  if (format) {
+    const overlaps = findFormatOverlaps(format);
+    if (overlaps.length > 0) {
+      return {
+        output: {
+          error: true,
+          message:
+            "Each entity type may appear in only one format bucket (redacted, masked, or plaintext). " +
+            `The following appear in more than one: ${overlaps.join(", ")}.`,
+        },
+        isError: true,
+      };
+    }
+  }
+
   try {
     const options = buildReidentifyOptions(format);
 
@@ -76,7 +119,7 @@ export async function handleReIdentify(
       output: {
         inputText: inputString,
         processedText: response.processedText,
-        ...(format && { format }),
+        ...(format && { format: normalizeFormat(format) }),
       },
     };
   } catch (error) {

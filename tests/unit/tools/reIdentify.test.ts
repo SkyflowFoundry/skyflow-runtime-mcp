@@ -153,6 +153,44 @@ describe("handleReIdentify", () => {
       expect(output.format).toEqual({});
     });
 
+    it("should drop empty buckets from the echoed format", async () => {
+      const skyflow = createMockSkyflow({ processedText: "restored" });
+      const result = await handleReIdentify("input", skyflow as any, false, {
+        masked: ["ssn"],
+        redacted: [],
+        plaintext: [],
+      });
+      const output = result.output as ReIdentifyOutput;
+
+      expect(output.format).toEqual({ masked: ["ssn"] });
+    });
+
+    it("should reject an entity type that appears in more than one bucket", async () => {
+      const skyflow = createMockSkyflow({ processedText: "restored" });
+      const result = await handleReIdentify("input", skyflow as any, false, {
+        redacted: ["ssn"],
+        masked: ["ssn"],
+      });
+      const output = result.output as ReIdentifyErrorOutput;
+
+      expect(result.isError).toBe(true);
+      expect(output.error).toBe(true);
+      expect(output.message).toContain("ssn");
+      expect(output.message).toContain("only one format bucket");
+      expect(mockReidentifyText).not.toHaveBeenCalled();
+    });
+
+    it("should allow the same entity listed twice within a single bucket", async () => {
+      const skyflow = createMockSkyflow({ processedText: "restored" });
+      const result = await handleReIdentify("input", skyflow as any, false, {
+        masked: ["ssn", "ssn"],
+      });
+
+      // A duplicate within one bucket is not a cross-bucket conflict
+      expect(result.isError).toBeUndefined();
+      expect(mockSetMaskedEntities).toHaveBeenCalledWith(["ssn", "ssn"]);
+    });
+
     it("should return an error for an invalid entity type in the format", async () => {
       const skyflow = createMockSkyflow({ processedText: "restored" });
       const result = await handleReIdentify("input", skyflow as any, false, {
