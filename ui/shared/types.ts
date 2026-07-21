@@ -19,10 +19,18 @@ export interface DeIdentifyResult {
   note?: string;
 }
 
+/** Per-entity-type formatting applied during re-identification */
+export interface ReIdentifyFormat {
+  redacted?: string[];
+  masked?: string[];
+  plaintext?: string[];
+}
+
 /** Result from the re-identify tool */
 export interface ReIdentifyResult {
   inputText?: string;
   processedText?: string;
+  format?: ReIdentifyFormat;
   error?: string;
   message?: string;
   anonymousModeRestricted?: boolean;

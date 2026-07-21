@@ -160,6 +160,39 @@ function highlightValuesInOutput(text: string, mappings: TokenMapping[]): string
   return html;
 }
 
+function renderFormatSummary(format: NonNullable<ReIdentifyResult["format"]>): string {
+  const groups: { label: string; entities: string[] }[] = [
+    { label: "Plaintext", entities: format.plaintext || [] },
+    { label: "Masked", entities: format.masked || [] },
+    { label: "Redacted", entities: format.redacted || [] },
+  ].filter((g) => g.entities.length > 0);
+
+  if (groups.length === 0) return "";
+
+  const groupsHtml = groups
+    .map((g) => {
+      const chips = g.entities
+        .map((e) => {
+          const cls = getEntityClass(e.toUpperCase());
+          const label = e.replace(/_/g, " ");
+          return `<span class="badge ${cls}"><span class="badge-dot" style="background: var(--entity-color)"></span>${escapeHtml(label)}</span>`;
+        })
+        .join(" ");
+      return `
+        <div class="format-group">
+          <span class="format-group-label">${escapeHtml(g.label)}</span>
+          <span class="format-group-chips">${chips}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="section-heading">Format Applied</div>
+    <div class="format-summary">${groupsHtml}</div>
+  `;
+}
+
 function renderResult(data: ReIdentifyResult): void {
   if (data.error || data.anonymousModeRestricted) {
     const isAnonymous = data.anonymousModeRestricted;
@@ -210,6 +243,8 @@ function renderResult(data: ReIdentifyResult): void {
           <span class="stat-label">Tokens Restored</span>
         </div>
       </div>
+
+      ${data.format ? renderFormatSummary(data.format) : ""}
 
       <div class="panels">
         <div class="panel">

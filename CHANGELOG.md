@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Re-identify output format control** — The `re-identify` tool now accepts an optional `format` object (`{ redacted?, masked?, plaintext? }`, each a list of entity type strings) that lets the caller specify, per entity type, how tokens are rendered on the way out — fully restored (plaintext), partially masked, or fully redacted. Entity types not listed default to full plaintext restoration, preserving existing behavior. Maps to the `skyflow-node` SDK's `ReidentifyTextOptions` per the Detect API spec. The applied format is echoed back in the response and summarized in the re-identify UI.
+
 - **MCP Apps UI for all three tools** — Each tool (`dehydrate`, `rehydrate`, `dehydrate_file`) now has an interactive vanilla TypeScript UI that renders inline in MCP Apps-capable hosts. Text-only hosts continue to receive JSON responses as before.
   - **Dehydrate UI**: Side-by-side before/after text panels with color-coded entity highlights, confidence scores, and an entity breakdown table. Shows anonymous mode banner when applicable.
   - **Rehydrate UI**: Token-to-original mapping display with color-matched highlights across before/after panels.

@@ -1,15 +1,52 @@
-import { ReidentifyTextRequest, SkyflowError } from "skyflow-node";
+import { ReidentifyTextOptions, ReidentifyTextRequest, SkyflowError } from "skyflow-node";
 import type { Skyflow } from "skyflow-node";
-import type { ReIdentifyOutput, ReIdentifyErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
+import { getEntityEnum } from "../mappings/entityMaps.js";
+import type { ReIdentifyFormat, ReIdentifyOutput, ReIdentifyErrorOutput, AnonymousModeError, ToolResult } from "./types.js";
+
+/**
+ * Build Skyflow re-identify options from the tool's `format` argument.
+ * Only buckets containing at least one entity type are set, so an empty or
+ * absent bucket falls back to the API default (plaintext re-identification).
+ * Returns `undefined` when no entity types are specified, so the SDK is called
+ * without options and every token is fully re-identified (the default behavior).
+ */
+function buildReidentifyOptions(
+  format: ReIdentifyFormat | undefined
+): ReidentifyTextOptions | undefined {
+  if (!format) return undefined;
+
+  const options = new ReidentifyTextOptions();
+  let hasAny = false;
+
+  if (format.redacted && format.redacted.length > 0) {
+    options.setRedactedEntities(format.redacted.map(getEntityEnum));
+    hasAny = true;
+  }
+  if (format.masked && format.masked.length > 0) {
+    options.setMaskedEntities(format.masked.map(getEntityEnum));
+    hasAny = true;
+  }
+  if (format.plaintext && format.plaintext.length > 0) {
+    options.setPlainTextEntities(format.plaintext.map(getEntityEnum));
+    hasAny = true;
+  }
+
+  return hasAny ? options : undefined;
+}
 
 /**
  * Handle the re-identify tool logic.
  * Restores original sensitive data from de-identified placeholders.
+ *
+ * An optional `format` controls how each entity type is rendered on the way out
+ * (redacted / masked / plaintext), per the Skyflow Detect API spec. When omitted,
+ * every token is fully re-identified to its original plaintext value.
  */
 export async function handleReIdentify(
   inputString: string,
   skyflow: Skyflow,
-  anonymousMode: boolean
+  anonymousMode: boolean,
+  format?: ReIdentifyFormat
 ): Promise<ToolResult<ReIdentifyOutput | AnonymousModeError | ReIdentifyErrorOutput>> {
   if (anonymousMode) {
     return {
@@ -29,14 +66,17 @@ export async function handleReIdentify(
   }
 
   try {
+    const options = buildReidentifyOptions(format);
+
     const response = await skyflow
       .detect()
-      .reidentifyText(new ReidentifyTextRequest(inputString));
+      .reidentifyText(new ReidentifyTextRequest(inputString), options);
 
     return {
       output: {
         inputText: inputString,
         processedText: response.processedText,
+        ...(format && { format }),
       },
     };
   } catch (error) {

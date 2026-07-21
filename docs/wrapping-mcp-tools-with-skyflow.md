@@ -220,6 +220,29 @@ lowercase string → enum map in `src/lib/mappings/entityMaps.ts` (`ENTITY_MAP`)
 reference list. Common values include `email_address`, `ssn`, `credit_card`, `name`,
 `phone_number`, `ip_address`, `location`, and `bank_account`.
 
+### Optional: control re-identify output format
+
+Re-identify fully restores every token by default. To render specific entity types differently on
+the way out — reveal some, partially mask others, fully redact the rest — pass a
+`ReidentifyTextOptions` as the second argument. Entity types you don't list default to full plaintext
+restoration:
+
+```ts
+import { ReidentifyTextOptions, DetectEntities } from "skyflow-node";
+
+const options = new ReidentifyTextOptions();
+options.setPlainTextEntities([DetectEntities.NAME]);      // restore in full
+options.setMaskedEntities([DetectEntities.SSN]);          // partially masked (e.g. ***-**-6789)
+options.setRedactedEntities([DetectEntities.EMAIL_ADDRESS]); // fully hidden
+
+const res = await skyflow
+  .detect()
+  .reidentifyText(new ReidentifyTextRequest(text), options);
+```
+
+This is the same capability the `re-identify` MCP tool exposes via its optional `format` argument
+(`{ redacted, masked, plaintext }`); see `src/lib/tools/reIdentify.ts`.
+
 ## Approach B — Detect REST API (any language)
 
 The SDK just wraps Skyflow's **Detect REST API**, so any language can run the same round-trip over
@@ -277,6 +300,18 @@ curl -X POST "https://$CLUSTER_ID.vault.skyflowapis.com/v1/detect/reidentify/str
 
 ```json
 { "text": "email john.doe@example.com about order 12345" }
+```
+
+`text` and `vault_id` are required. Add an optional `format` object to control how each entity type
+is rendered — `{ "redacted": [...], "masked": [...], "plaintext": [...] }`, each a list of the same
+lowercase entity names. Entity types you don't list default to full plaintext restoration:
+
+```json
+{
+  "vault_id": "...",
+  "text": "email [EMAIL_ADDRESS_a1b2], ssn [SSN_c3d4]",
+  "format": { "redacted": ["email_address"], "masked": ["ssn"] }
+}
 ```
 
 Note the re-identify response field is `text`, while de-identify returns `processed_text` — an
