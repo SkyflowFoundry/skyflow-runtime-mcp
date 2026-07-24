@@ -98,7 +98,8 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
 
 **re-identify tool** (`src/lib/tools/reIdentify.ts`)
 - Reverses de-identification by replacing tokens with original sensitive data
-- Returns `inputText` and `processedText`
+- Accepts optional `format` object (`{ redacted?, masked?, plaintext? }`, each a list of entity type strings from `ENTITY_MAP`) to control how each entity type is rendered on the way out, per the Detect API spec. Maps to the SDK's `ReidentifyTextOptions` (`setRedactedEntities` / `setMaskedEntities` / `setPlainTextEntities`). Entity types not listed fall back to the Detect API's default and are restored as full plaintext (the same as re-identifying without a format). Rejects with an error if the same entity type appears in more than one bucket
+- Returns `inputText` and `processedText`, and echoes back the requested `format` (normalized — empty buckets omitted) when one was provided
 - Returns error with `anonymousModeRestricted: true` in anonymous mode
 
 **de-identify_file tool** (`src/lib/tools/deIdentifyFile.ts`)
