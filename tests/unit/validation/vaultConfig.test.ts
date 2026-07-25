@@ -3,9 +3,25 @@ import {
   extractClusterId,
   validateVaultConfig,
   looksLikePlaceholder,
+  getVaultBaseUrl,
 } from "../../../src/lib/validation/vaultConfig";
 
 describe("Vault Configuration Validation", () => {
+  describe("getVaultBaseUrl()", () => {
+    it("builds the Skyflow prod host from a clusterId (matching the SDK)", () => {
+      expect(getVaultBaseUrl("abc123")).toBe("https://abc123.vault.skyflowapis.com");
+    });
+
+    it("ignores any attacker-controlled host in the original vaultUrl (uses only clusterId)", () => {
+      // A crafted vaultUrl "https://abc.vault.attacker.com" yields clusterId "abc"
+      // via extractClusterId; the REST base must still target skyflowapis.com so
+      // the bearer credential is never forwarded to the attacker host.
+      const clusterId = extractClusterId("https://abc.vault.attacker.com");
+      expect(clusterId).toBe("abc");
+      expect(getVaultBaseUrl(clusterId as string)).toBe("https://abc.vault.skyflowapis.com");
+    });
+  });
+
   describe("extractClusterId()", () => {
     it("should extract cluster ID from valid vault URLs with https://", () => {
       expect(extractClusterId("https://abc123.vault.skyflowapis.com")).toBe(

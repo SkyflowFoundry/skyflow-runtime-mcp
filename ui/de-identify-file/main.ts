@@ -12,14 +12,16 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
-function showLoading(fileName?: string, mimeType?: string): void {
+function showLoading(fileName?: string, mimeType?: string, runId?: string): void {
+  const fileLabel = fileName || runId;
+  const kindLabel = fileName ? "File" : runId ? "Run ID" : "";
   root.innerHTML = `
     <div class="container">
-      ${fileName ? `
+      ${fileLabel ? `
         <div class="stats-bar">
           <div class="stat">
-            <span class="stat-value" style="font-size: 14px;">${escapeHtml(fileName)}</span>
-            <span class="stat-label">File</span>
+            <span class="stat-value" style="font-size: 14px;">${escapeHtml(fileLabel)}</span>
+            <span class="stat-label">${escapeHtml(kindLabel)}</span>
           </div>
           ${mimeType ? `
             <div class="stat">
@@ -31,7 +33,7 @@ function showLoading(fileName?: string, mimeType?: string): void {
       ` : ""}
       <div class="loading">
         <div class="spinner"></div>
-        <span>Processing file for sensitive data...</span>
+        <span>${runId && !fileName ? "Checking de-identification run..." : "Processing file for sensitive data..."}</span>
       </div>
     </div>
   `;
@@ -99,6 +101,24 @@ function renderResult(data: DeIdentifyFileResult): void {
     }
   }
 
+  // In-progress runs: show a prominent processing banner with polling guidance
+  if (data.status && data.status.toUpperCase() === "IN_PROGRESS" && data.runId) {
+    root.innerHTML = `
+      <div class="container">
+        <div class="banner" style="background: var(--color-background-secondary, #f8f9fa); border: 1px solid var(--color-border-secondary, #e0e0e0);">
+          <strong>Status:</strong> <span style="color: var(--color-text-warning, #f39c12)">IN_PROGRESS</span>
+          &nbsp;&middot;&nbsp;
+          <strong>Run ID:</strong> <code style="font-size: 11px;">${escapeHtml(data.runId)}</code>
+        </div>
+        <div class="loading" style="margin-top: 16px;">
+          <div class="spinner"></div>
+          <span>The file is still being processed. ${escapeHtml(data.note || "Check the run status to retrieve the result.")}</span>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   // Build metadata cards
   const metaItems: { label: string; value: string }[] = [];
   if (data.inputFileName) metaItems.push({ label: "File Name", value: data.inputFileName });
@@ -130,7 +150,13 @@ function renderResult(data: DeIdentifyFileResult): void {
   // Status badge for async operations
   let statusHtml = "";
   if (data.runId) {
-    const statusColor = data.status === "completed" ? "var(--color-text-success, #27ae60)" : "var(--color-text-warning, #f39c12)";
+    const statusUpper = (data.status || "").toUpperCase();
+    const statusColor =
+      statusUpper === "SUCCESS" || statusUpper === "COMPLETED"
+        ? "var(--color-text-success, #27ae60)"
+        : statusUpper === "FAILED"
+          ? "var(--color-text-danger, #e74c3c)"
+          : "var(--color-text-warning, #f39c12)";
     statusHtml = `
       <div class="banner" style="background: var(--color-background-secondary, #f8f9fa); border: 1px solid var(--color-border-secondary, #e0e0e0); margin-bottom: 16px;">
         <strong>Status:</strong> <span style="color: ${statusColor}">${escapeHtml(data.status || "processing")}</span>
@@ -138,6 +164,14 @@ function renderResult(data: DeIdentifyFileResult): void {
         <strong>Run ID:</strong> <code style="font-size: 11px;">${escapeHtml(data.runId)}</code>
       </div>
     `;
+  }
+
+  // Non-fatal warnings (e.g. ignored options)
+  let warningsHtml = "";
+  if (data.warnings && data.warnings.length > 0) {
+    warningsHtml = data.warnings
+      .map((w) => `<div class="banner banner-warning" style="margin-bottom: 16px;">${escapeHtml(w)}</div>`)
+      .join("");
   }
 
   // Entity gallery
@@ -157,6 +191,7 @@ function renderResult(data: DeIdentifyFileResult): void {
   root.innerHTML = `
     <div class="container">
       ${statusHtml}
+      ${warningsHtml}
       ${metaHtml}
       ${fileViewerHtml}
       ${galleryHtml}
@@ -172,8 +207,9 @@ setupHostTheming(app);
 app.ontoolinput = (params) => {
   const args = params.arguments as Record<string, unknown> | undefined;
   showLoading(
-    args?.fileName as string | undefined,
-    args?.mimeType as string | undefined
+    (args?.fileName as string | undefined) ?? (args?.fileUrl as string | undefined),
+    args?.mimeType as string | undefined,
+    args?.runId as string | undefined
   );
 };
 

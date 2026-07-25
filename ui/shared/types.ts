@@ -36,9 +36,10 @@ export interface ReIdentifyResult {
   anonymousModeRestricted?: boolean;
 }
 
-/** Result from the de-identify_file tool */
+/** Result from the de-identify-file and get-file-run-status tools */
 export interface DeIdentifyFileResult {
   inputFileName?: string;
+  inputFileUrl?: string;
   inputMimeType?: string;
   processedFileData?: string;
   mimeType?: string;
@@ -51,6 +52,20 @@ export interface DeIdentifyFileResult {
   pageCount?: number;
   slideCount?: number;
   runId?: string;
+  status?: string;
+  note?: string;
+  warnings?: string[];
+  error?: string;
+  message?: string;
+  anonymousModeRestricted?: boolean;
+}
+
+/** Result from the re-identify-file tool */
+export interface ReIdentifyFileResult {
+  inputFileName?: string;
+  inputFileUrl?: string;
+  processedFileData?: string;
+  extension?: string;
   status?: string;
   error?: string;
   message?: string;
