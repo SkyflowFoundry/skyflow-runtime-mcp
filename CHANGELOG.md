@@ -11,6 +11,8 @@
   - New `ui/re-identify-file/` MCP Apps UI; `get-file-run-status` shares the de-identify-file app. New shared helpers: `src/lib/files/fileSource.ts` (URL download with SSRF guard, size/timeout limits, filename inference) and `src/lib/detect/detectRest.ts` (direct REST client for the runs and reidentify-file endpoints, tolerant of both camelCase and snake_case response fields).
   - All three tools require authenticated mode; in anonymous mode they return setup instructions.
 
+- **Re-identify output format control** — The `re-identify` tool now accepts an optional `format` object (`{ redacted?, masked?, plaintext? }`, each a list of entity type strings) that lets the caller specify, per entity type, how tokens are rendered on the way out — fully restored (plaintext), partially masked, or fully redacted. Omitting `format` preserves existing behavior exactly; entity types not listed in a provided `format` fall back to the Detect API's default and are restored as full plaintext. Maps to the `skyflow-node` SDK's `ReidentifyTextOptions` per the Detect API spec. The requested format is echoed back (normalized) in the response and summarized in the re-identify UI.
+
 ### Changed (file tools)
 
 - **`skyflow-node` upgraded to ^2.1.2** — required for the fixed `IN_PROGRESS` timeout path in `deidentifyFile` (2.0.0 crashed with a destructuring TypeError when a run outlived the SDK wait window).

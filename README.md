@@ -273,6 +273,24 @@ curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}"
   -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"re-identify","arguments":{"inputString":"[REDACTED_TEXT_WITH_TOKENS]"}},"id":3}'
 ```
 
+By default every token is fully restored to its original value. To control how
+individual entity types are rendered, pass an optional `format` object with any
+of `redacted`, `masked`, or `plaintext` — each a list of entity types (the same
+lowercase names as the `de-identify` tool, e.g. `ssn`, `email_address`). Entity
+types not listed fall back to the Detect API's default and are restored as full plaintext:
+
+```bash
+curl -X POST "http://localhost:3000/mcp?vaultId={vault_id}&vaultUrl={vault_url}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer {your_bearer_token}" \
+  -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"re-identify","arguments":{"inputString":"[REDACTED_TEXT_WITH_TOKENS]","format":{"masked":["ssn"],"redacted":["email_address"],"plaintext":["name"]}}},"id":3}'
+```
+
+In this example, SSNs come back partially masked, email addresses are fully
+redacted, names are restored in full, and any other detected entity type is
+restored to plaintext.
+
 ### De-identify a File
 
 Pass a signed or public URL — the server downloads the file and forwards it to Skyflow as base64:
@@ -386,6 +404,7 @@ After updating the config:
 
 ## Learn More
 
+- [Wrapping Your MCP Tools with Skyflow](docs/wrapping-mcp-tools-with-skyflow.md) — de-identify requests / re-identify responses inside your own MCP server
 - [Model Context Protocol Documentation](https://modelcontextprotocol.io)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [Streamable HTTP Transport Guide](https://modelcontextprotocol.io/docs/concepts/transports#streamable-http)

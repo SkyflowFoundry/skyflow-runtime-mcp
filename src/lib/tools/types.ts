@@ -19,10 +19,27 @@ export interface DeIdentifyOutput {
   note?: string;
 }
 
+/**
+ * Per-entity-type formatting for re-identification.
+ * Mirrors the Skyflow Detect API `format` object: each entity type listed is
+ * rendered according to its bucket. Entity types not listed in any bucket
+ * default to `plaintext` (full re-identification).
+ */
+export interface ReIdentifyFormat {
+  /** Entity types to fully redact (original value completely hidden). */
+  redacted?: string[];
+  /** Entity types to partially mask (only part of the original value revealed). */
+  masked?: string[];
+  /** Entity types to fully restore to their original plaintext value. */
+  plaintext?: string[];
+}
+
 /** Output from the re-identify tool handler */
 export interface ReIdentifyOutput {
   inputText: string;
   processedText: string;
+  /** The re-identification format the caller requested (normalized), echoed back when provided. */
+  format?: ReIdentifyFormat;
 }
 
 /** Error output for tools that don't support anonymous mode */

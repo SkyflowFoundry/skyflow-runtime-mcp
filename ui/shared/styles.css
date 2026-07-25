@@ -247,6 +247,36 @@ body {
   flex-shrink: 0;
 }
 
+/* Re-identify format summary */
+.format-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.format-group {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.format-group-label {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-secondary, #6b6b80);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 68px;
+}
+
+.format-group-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 /* Info banner */
 .banner {
   padding: 10px 14px;

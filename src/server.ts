@@ -249,11 +249,40 @@ registerAppTool(
   {
     title: "Skyflow Re-identify Tool",
     description:
-      "Re-identify previously de-identified sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data.",
-    inputSchema: { inputString: z.string().min(1).describe("Original Text — paste the tokenized text you want to restore") },
+      "Re-identify previously de-identified sensitive information in strings using Skyflow. This tool accepts a string with redacted placeholders (like [CREDIT_CARD_abc123]) and returns the original sensitive data. Optionally pass a `format` object to control how each entity type is rendered on the way out — fully restore (plaintext), partially mask, or fully redact specific entity types. Entity types not listed fall back to the Detect API's default and are restored as full plaintext (the same as re-identifying without a format).",
+    inputSchema: {
+      inputString: z.string().min(1).describe("Original Text — paste the tokenized text you want to restore"),
+      format: z
+        .object({
+          redacted: z
+            .array(z.enum(ENTITY_KEYS))
+            .optional()
+            .describe("Entity types to fully redact — the original value is completely hidden (e.g. '[REDACTED]')."),
+          masked: z
+            .array(z.enum(ENTITY_KEYS))
+            .optional()
+            .describe("Entity types to partially mask — only part of the original value is revealed. The exact masked form depends on the vault's masking configuration."),
+          plaintext: z
+            .array(z.enum(ENTITY_KEYS))
+            .optional()
+            .describe("Entity types to fully restore to their original plaintext value. This is already the default for any unlisted entity type, so listing here is only for explicitness."),
+        })
+        .optional()
+        .describe(
+          "Optional per-entity-type re-identification format. List entity types under 'redacted', 'masked', or 'plaintext' to control how each is rendered. Any entity type not listed falls back to the Detect API's default and is restored as full plaintext."
+        ),
+    },
     outputSchema: {
       inputText: z.string().optional().describe("The original tokenized input text"),
       processedText: z.string().optional(),
+      format: z
+        .object({
+          redacted: z.array(z.string()).optional(),
+          masked: z.array(z.string()).optional(),
+          plaintext: z.array(z.string()).optional(),
+        })
+        .optional()
+        .describe("The re-identification format the caller requested, normalized (empty buckets dropped) and echoed back when provided"),
       error: z.union([z.boolean(), z.string()]).optional().describe("Error indicator or message"),
       anonymousModeRestricted: z.boolean().optional().describe("True when blocked due to anonymous mode"),
       message: z.string().optional().describe("Detailed error or setup instructions"),
@@ -263,8 +292,8 @@ registerAppTool(
     },
     _meta: { ui: { resourceUri: RE_IDENTIFY_RESOURCE_URI } },
   },
-  async ({ inputString }) => {
-    const result = await handleReIdentify(inputString, getCurrentSkyflow(), isAnonymousMode());
+  async ({ inputString, format }) => {
+    const result = await handleReIdentify(inputString, getCurrentSkyflow(), isAnonymousMode(), format);
     return {
       content: [{ type: "text", text: JSON.stringify(result.output) }],
       structuredContent: toStructuredContent(result.output),
